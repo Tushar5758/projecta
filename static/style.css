@@ -1,0 +1,19 @@
+.anchor-tag {
+    text-decoration: none;
+  }
+  
+  #number {
+    padding-left: 12px;
+  }
+  
+  .filters {
+    
+    padding: 2rem;
+    margin: 3rem;
+    background: #D3D3D3;
+  }
+  
+  #tag-input {
+    margin: 10px;
+  }
+
