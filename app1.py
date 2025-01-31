@@ -36,10 +36,6 @@ def faculty_dashboard():
         return redirect(url_for("faculty_login"))
     return render_template("faculty_dashboard.html")
 
-@app.route("/index")
-def home():
-    return render_template("index.html")
-
 
 @app.route("/questions")
 def questions():
