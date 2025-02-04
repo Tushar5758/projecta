@@ -309,6 +309,7 @@ def faculty_login():
 
 # Route for faculty dashboard
 @app.route("/faculty/dashboard")
+@faculty_required
 def faculty_dashboard():
     try:
         if 'faculty_email' not in session:
@@ -322,6 +323,7 @@ def faculty_dashboard():
 
 # Route for logging out
 @app.route('/logout')
+@student_required
 def logout():
     try:
         session.clear()
@@ -335,6 +337,7 @@ def logout():
 
 # Route for student home page where the posts are shown
 @app.route('/index')
+@student_required
 def index():
     try:
         if 's_id' not in session:
@@ -354,6 +357,7 @@ def index():
 
 # Route for creating posts
 @app.route('/create_post', methods=['GET', 'POST'])
+@student_required
 def create_post():
     try:
         if 's_id' not in session:
@@ -372,6 +376,20 @@ def create_post():
             db.session.add(new_post)
             db.session.commit()
 
+            keyword_list = [k.strip() for k in keywords.split(',') if k.strip()]
+
+            for keyword in keyword_list:
+                # Check if the tag already exists
+                tag = Tag.query.filter_by(name=keyword).first()
+                if not tag:
+                    tag = Tag(name=keyword)
+                    db.session.add(tag)
+
+                # Associate tag with the post
+                new_post.tags.append(tag)
+
+            db.session.commit()
+
             flash("Post created successfully")
             return redirect(url_for('index'))
 
@@ -384,6 +402,7 @@ def create_post():
 
 # Route of post page to show individual post
 @app.route('/post/<int:post_id>')
+@student_required
 def post_details(post_id):
     try:
         if 's_id' not in session:
@@ -398,9 +417,9 @@ def post_details(post_id):
         username = session.get('username')
         user_liked = session.get('user_liked', False)
 
-        keyword_list = post.keywords.split(",") if post.keywords else []  # splitting according to commas
-        no_space_keyword = [keyword.strip() for keyword in keyword_list]  # to strip spaces
-        post.keywords = no_space_keyword
+        keyword_list = post.keywords.split(",") if post.keywords else []  # Splitting by commas
+        keywords = [keyword.strip() for keyword in keyword_list if keyword.strip()]  # Removing spaces & empty entries
+        post.keywords = keywords
 
         return render_template('ASK_Anubhav/Student/post_details.html', post=post, username=username, user_liked=user_liked, posted_by=posted_by)
 
@@ -411,6 +430,7 @@ def post_details(post_id):
 
 # Route to like a post
 @app.route('/like/<int:post_id>', methods=['POST'])
+@student_required
 def like_post(post_id):
     try:
         if 's_id' not in session:
@@ -449,6 +469,7 @@ def like_post(post_id):
 
 # Route to show a user's own posts
 @app.route('/my_posts')
+@student_required
 def my_posts():
     try:
         if 's_id' not in session:
@@ -468,6 +489,7 @@ def my_posts():
 
 # Route to add questions
 @app.route("/questions", methods=["POST"])
+@student_required
 def add_question():
     try:
         if 's_id' not in session:
@@ -504,6 +526,7 @@ def add_question():
 
 # Route to like questions
 @app.route("/questions/<int:question_id>/like", methods=["POST"])
+@student_required
 def like_question(question_id):
     try:
         if 's_id' not in session:
