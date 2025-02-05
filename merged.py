@@ -259,6 +259,38 @@ def register():
 
     return render_template('ASK_Anubhav/Student/register.html')
 
+@app.route('/leaderboard', methods=['GET', 'POST'])
+def leaderboard():
+    sort_option = request.form.get('sort', 'overall')  # Default to 'overall'
+
+    # Base query to calculate total likes per user from the post table
+    query = text("""
+        SELECT u.student_id, u.username, COALESCE(SUM(p.like_count), 0) AS total_likes
+        FROM user u
+        LEFT JOIN post p ON u.student_id = p.student_id
+    """)
+
+    # Apply filter if 'monthly' is selected
+    if sort_option == 'monthly':
+        query = text("""
+            SELECT u.student_id, u.username, COALESCE(SUM(p.like_count), 0) AS total_likes
+            FROM user u
+            LEFT JOIN post p ON u.student_id = p.student_id 
+            WHERE strftime('%Y-%m', p.date_of_post) = strftime('%Y-%m', 'now')
+        """)
+
+    query = text(query.text + " GROUP BY u.student_id ORDER BY total_likes DESC")
+
+    # Execute query
+    result = db.session.execute(query).fetchall()
+
+    # Format leaderboard data
+    leaderboard_data = [
+        {'rank': idx + 1, 'user': row.username, 'likes': row.total_likes}
+        for idx, row in enumerate(result)
+    ]
+
+    return render_template('ASK_Anubhav/Student/leaderboard.html', leaderboard_data=leaderboard_data, sort_option=sort_option)
 
 # Route for login
 @app.route('/login', methods=['GET', 'POST'])
