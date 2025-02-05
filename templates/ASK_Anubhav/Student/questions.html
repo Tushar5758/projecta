@@ -5,62 +5,44 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ask Anubhav - Questions</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    <link rel="stylesheet" href="question.css">
 </head>
 <body>
-    <header>
+    <header class="bg-primary text-white text-center py-3">
         <h1>Ask Anubhav - Questions</h1>
-        <nav>
-            <a href="index.html">Home</a>
-            <a href="second.html">Posts</a>
-            <a href="questions.html" class="questions active">Questions</a>
-            <a href="leaderboard.html">Leaderboard</a>
+        <nav class="nav justify-content-center">
+            <a class="nav-link text-white" href="index.html">Home</a>
+            <a class="nav-link text-white" href="second.html">Posts</a>
+            <a class="nav-link text-white active font-weight-bold" href="questions.html">Questions</a>
+            <a class="nav-link text-white" href="leaderboard.html">Leaderboard</a>
         </nav>
     </header>
-    <main class="container">
-        <section class="ask-question">
-            <h2>Ask a Question</h2>
+    
+    <main class="container mt-4">
+        <section class="p-4 border rounded">
+            <h2 class="text-center">Ask a Question</h2>
             <form id="questionForm">
-                <input type="text" id="questionTitle" class="form-control" placeholder="Question Title" required>
-                <textarea id="questionDetail" class="form-control" placeholder="Details about your question..." required></textarea>
-                <button type="submit" class="btn btn-primary">Submit Question</button>
+                <div class="form-group">
+                    <input type="text" id="questionTitle" class="form-control" placeholder="Question Title" required>
+                </div>
+                <div class="form-group">
+                    <textarea id="questionDetail" class="form-control" placeholder="Details..." rows="4" required></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">Submit</button>
             </form>
         </section>
 
-        <section class="questions-list mt-5">
-            <h2>All Questions</h2>
-            <div id="questionsContainer"></div>
+        <section class="mt-5">
+            <h2 class="text-center">All Questions</h2>
+            <div id="questionsContainer" class="list-group mt-3"></div>
         </section>
     </main>
 
-    <!-- Answer Modal -->
-    <div class="modal fade" id="answerModal" tabindex="-1" role="dialog" aria-labelledby="answerModalLabel" aria-hidden="true">
-        <div class="modal-dialog" role="document">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="answerModalLabel">Submit Your Answer</h5>
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                        <span aria-hidden="true">&times;</span>
-                    </button>
-                </div>
-                <div class="modal-body">
-                    <input type="text" id="userId" class="form-control" placeholder="Your User ID" required>
-                    <textarea id="answerText" class="form-control" placeholder="Your answer..." required></textarea>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-                    <button id="submitAnswer" class="btn btn-primary">Submit Answer</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <footer>
+    <footer class="bg-dark text-white text-center py-3 mt-5">
         <p>&copy; 2024 Ask Anubhav</p>
     </footer>
 
-    <script src="question.js"></script>
-    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="question.js"></script>
 </body>
 </html>

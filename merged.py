@@ -1,4 +1,5 @@
 import os
+from functools import wraps
 
 from flask import Flask, render_template, session, redirect, request, url_for, flash, jsonify
 from flask_sqlalchemy import SQLAlchemy
@@ -7,16 +8,20 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timezone
 from sqlalchemy import text
 
+
+# Creating and initializing the flask app and the database
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secretkey123'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///askanubhav.db'
 db = SQLAlchemy(app)
+
 
 # Faculty credentials dictionary
 FACULTY_CREDENTIALS = {
     "faculty1@gmail.com": "password123",
     "faculty2@gmail.com": "pass456"
 }
+
 
 # Database Models
 post_tags = db.Table('post_tags',
@@ -25,6 +30,7 @@ post_tags = db.Table('post_tags',
                      )
 
 
+# Simple login for simulation with the details
 class User(db.Model):
     student_id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(100), nullable=False, unique=True)
@@ -33,6 +39,7 @@ class User(db.Model):
     email = db.Column(db.String(120), unique=True)
 
 
+# Post table with the details
 class Post(db.Model):
     __tablename__ = 'post'
 
@@ -51,6 +58,7 @@ class Post(db.Model):
         return f'<Post {self.title}>'
 
 
+# Question table with the details
 class Question(db.Model):
     __tablename__ = 'question'
 
@@ -69,6 +77,7 @@ class Question(db.Model):
         return f'<Question {self.body[:30]}>'
 
 
+# Answer table with the details
 class Answer(db.Model):
     __tablename__ = 'answer'
 
@@ -78,15 +87,14 @@ class Answer(db.Model):
     like_count = db.Column(db.Integer, default=0)
     question_id = db.Column(db.Integer, db.ForeignKey('question.id'), nullable=False)
 
-    # Use a unique backref name
     question = db.relationship('Question', backref='answer_reference', lazy=True)
-
     approval = db.relationship('AnswerApproval', uselist=False, back_populates='answer')
 
     def __repr__(self):
         return f'<Answer {self.body[:30]}>'
 
 
+# Tag table with tags
 class Tag(db.Model):
     __tablename__ = 'tag'
     id = db.Column(db.Integer, primary_key=True)
@@ -96,6 +104,7 @@ class Tag(db.Model):
         return f'<Tag {self.name}>'
 
 
+# Liked post table with the details
 class LikePost(db.Model):
     __tablename__ = 'like_post'
     id = db.Column(db.Integer, primary_key=True)
@@ -107,6 +116,7 @@ class LikePost(db.Model):
         return f'<LikePost PostID={self.post_id}, StudentID={self.student_id}>'
 
 
+# Liked question table with the details
 class LikeQuestion(db.Model):
     __tablename__ = 'like_question'
     id = db.Column(db.Integer, primary_key=True)
@@ -118,6 +128,7 @@ class LikeQuestion(db.Model):
         return f'<LikeQuestion QuestionID={self.question_id}, StudentID={self.student_id}>'
 
 
+# Liked answer table with the details
 class LikeAnswer(db.Model):
     __tablename__ = 'like_answer'
     id = db.Column(db.Integer, primary_key=True)
@@ -129,6 +140,7 @@ class LikeAnswer(db.Model):
         return f'<LikeAnswer AnswerID={self.answer_id}, StudentID={self.student_id}>'
 
 
+# Post approval table with the details
 class PostApproval(db.Model):
     __tablename__ = 'post_approval'
     id = db.Column(db.Integer, primary_key=True)
@@ -144,6 +156,7 @@ class PostApproval(db.Model):
         return f'<PostApproval PostID={self.post_id}, Status={self.status}>'
 
 
+# Question approval table with the details
 class QuestionApproval(db.Model):
     __tablename__ = 'question_approval'
     id = db.Column(db.Integer, primary_key=True)
@@ -159,6 +172,7 @@ class QuestionApproval(db.Model):
         return f'<QuestionApproval QuestionID={self.question_id}, Status={self.status}>'
 
 
+# Answer approval table with the details
 class AnswerApproval(db.Model):
     __tablename__ = 'answer_approval'
     id = db.Column(db.Integer, primary_key=True)
@@ -173,12 +187,8 @@ class AnswerApproval(db.Model):
     def __repr__(self):
         return f'<AnswerApproval AnswerID={self.answer_id}, Status={self.status}>'
 
-# [Previous model definitions for Answer, Tag, LikePost, LikeQuestion, LikeAnswer remain the same]
-# [Previous approval models (PostApproval, QuestionApproval, AnswerApproval) remain the same]
 
-# Routes
-
-
+# Reset database
 def reset_database():
     try:
         db_file = 'askanubhav.db'
@@ -189,222 +199,382 @@ def reset_database():
         print(f"Error deleting database: {e}")
 
 
+# Creates and sends the session details
 @app.context_processor
 def inject_session():
-    return dict(session=session)
+    try:
+        return dict(session=session)  # Inject session into all templates
+    except Exception as e:
+        print("Session not created due to: {str(e)}")
+        return dict(session={})
 
 
+# Student decorator
+def student_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 's_id' not in session:  # Check if student is logged in
+            flash("Please log in as a student to access this page.", "warning")
+            return redirect(url_for('login'))  # Redirect to login page
+        return f(*args, **kwargs)  # If logged in, proceed with the route
+    return decorated_function
+
+
+# Faculty decorator
+def faculty_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'faculty_email' not in session:  # Check if faculty is logged in
+            flash("Please log in as a faculty member to access this page.", "warning")
+            return redirect(url_for('faculty_login'))  # Redirect to faculty login page
+        return f(*args, **kwargs)  # If logged in, proceed with the route
+    return decorated_function
+
+
+# Route for registration
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        email = request.form.get('email')
-        hashed_password = generate_password_hash(password)
+        try:
+            username = request.form['username']
+            password = request.form['password']
+            email = request.form.get('email')
+            hashed_password = generate_password_hash(password)
 
-        user = User.query.filter_by(username=username).first()
-        if user:
-            flash("User already exists!")
+            user = User.query.filter_by(username=username).first()
+            if user:
+                flash("User already exists!")
+                return redirect(url_for('register'))
+
+            new_user = User(username=username, password=hashed_password, email=email)
+            db.session.add(new_user)
+            db.session.commit()
+
+            flash("Registration successful, please login now!")
+            return redirect(url_for('login'))
+
+        except Exception as e:
+            flash(f"An error occurred: {str(e)}")
             return redirect(url_for('register'))
 
-        new_user = User(username=username, password=hashed_password, email=email)
-        db.session.add(new_user)
-        db.session.commit()
-
-        flash("Registration successful, please login now!")
-        return redirect(url_for('login'))
     return render_template('ASK_Anubhav/Student/register.html')
 
+@app.route('/leaderboard', methods=['GET', 'POST'])
+def leaderboard():
+    sort_option = request.form.get('sort', 'overall')  # Default to 'overall'
 
+    # Base query to calculate total likes per user from the post table
+    query = text("""
+        SELECT u.student_id, u.username, COALESCE(SUM(p.like_count), 0) AS total_likes
+        FROM user u
+        LEFT JOIN post p ON u.student_id = p.student_id
+    """)
+
+    # Apply filter if 'monthly' is selected
+    if sort_option == 'monthly':
+        query = text("""
+            SELECT u.student_id, u.username, COALESCE(SUM(p.like_count), 0) AS total_likes
+            FROM user u
+            LEFT JOIN post p ON u.student_id = p.student_id 
+            WHERE strftime('%Y-%m', p.date_of_post) = strftime('%Y-%m', 'now')
+        """)
+
+    query = text(query.text + " GROUP BY u.student_id ORDER BY total_likes DESC")
+
+    # Execute query
+    result = db.session.execute(query).fetchall()
+
+    # Format leaderboard data
+    leaderboard_data = [
+        {'rank': idx + 1, 'user': row.username, 'likes': row.total_likes}
+        for idx, row in enumerate(result)
+    ]
+
+    return render_template('ASK_Anubhav/Student/leaderboard.html', leaderboard_data=leaderboard_data, sort_option=sort_option)
+
+# Route for login
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
+        try:
+            username = request.form.get('username')
+            password = request.form.get('password')
 
-        user = User.query.filter_by(username=username).first()
-        if not user or not check_password_hash(user.password, password):
-            flash('Invalid details')
+            user = User.query.filter_by(username=username).first()
+            if not user or not check_password_hash(user.password, password):
+                flash('Invalid details')
+                return redirect(url_for('login'))
+
+            session['s_id'] = user.student_id
+            session['username'] = user.username
+            flash("Login successful")
+            return redirect(url_for('index'))
+
+        except Exception as e:
+            flash(f"An error occurred: {str(e)}")
             return redirect(url_for('login'))
-
-        session['s_id'] = user.student_id
-        session['username'] = user.username
-        flash("Login successful")
-        return redirect(url_for('index'))
 
     return render_template('ASK_Anubhav/Student/login.html')
 
 
+# Route for faculty login
 @app.route("/faculty/login", methods=["GET", "POST"])
 def faculty_login():
     if request.method == "POST":
-        email = request.form.get("email")
-        password = request.form.get("password")
+        try:
+            email = request.form.get("email")
+            password = request.form.get("password")
 
-        if email in FACULTY_CREDENTIALS and FACULTY_CREDENTIALS[email] == password:
-            session['faculty_email'] = email
-            return redirect(url_for("faculty_dashboard"))
-        else:
-            error = "Invalid email or password."
+            if email in FACULTY_CREDENTIALS and FACULTY_CREDENTIALS[email] == password:
+                session['faculty_email'] = email
+                return redirect(url_for("faculty_dashboard"))
+            else:
+                error = "Invalid email or password."
+                return render_template("ASK_Anubhav/Faculty/faculty_login.html", error=error)
+
+        except Exception as e:
+            error = f"An error occurred: {str(e)}"
             return render_template("ASK_Anubhav/Faculty/faculty_login.html", error=error)
 
     return render_template("ASK_Anubhav/Faculty/faculty_login.html", error="")
 
 
+# Route for faculty dashboard
 @app.route("/faculty/dashboard")
+@faculty_required
 def faculty_dashboard():
-    if 'faculty_email' not in session:
-        return redirect(url_for("faculty_login"))
-    return render_template("ASK_Anubhav/Faculty/faculty_dashboard.html")
+    try:
+        if 'faculty_email' not in session:
+            return redirect(url_for("faculty_login"))
+        return render_template("ASK_Anubhav/Faculty/faculty_dashboard.html")
+    except Exception as e:
+        # Handling any unexpected errors
+        error = f"An error occurred: {str(e)}"
+        return render_template("ASK_Anubhav/Faculty/faculty_dashboard.html")
 
 
+# Route for logging out
 @app.route('/logout')
+@student_required
 def logout():
-    session.clear()
-    flash("You have been logged out", "info")
-    return redirect(url_for('login'))
+    try:
+        session.clear()
+        flash("You have been logged out", "info")
+        return redirect(url_for('login'))
+    except Exception as e:
+        # Handling any unexpected errors
+        flash(f"An error occurred during logout: {str(e)}", "danger")
+        return redirect(url_for('login'))
 
 
+# Route for student home page where the posts are shown
 @app.route('/index')
+@student_required
 def index():
-    if 's_id' not in session:
-        flash("Please login to access the dashboard")
+    try:
+        if 's_id' not in session:
+            flash("Please login to access the dashboard")
+            return redirect(url_for('login'))
+
+        posts = Post.query.order_by(Post.date_of_post.desc()).all()
+        total_posts = len(posts)
+
+        username = session.get('username')
+        return render_template('ASK_Anubhav/Student/index.html', username=username, posts=posts, total_posts=total_posts)
+
+    except Exception as e:
+        flash(f"An error occurred: {str(e)}", "danger")
         return redirect(url_for('login'))
 
-    posts = Post.query.order_by(Post.date_of_post.desc()).all()
-    total_posts = len(posts)
 
-    username = session.get('username')
-    return render_template('ASK_Anubhav/Student/index.html', username=username, posts=posts, total_posts=total_posts)
-
-
+# Route for creating posts
 @app.route('/create_post', methods=['GET', 'POST'])
+@student_required
 def create_post():
-    if 's_id' not in session:
-        flash("Please log in to create a post")
-        return redirect(url_for('login'))
+    try:
+        if 's_id' not in session:
+            flash("Please log in to create a post")
+            return redirect(url_for('login'))
 
-    username = session.get('username')
+        username = session.get('username')
 
-    if request.method == 'POST':
-        title = request.form.get('title')
-        body = request.form.get('body')
-        keywords = request.form.get('keywords')
+        if request.method == 'POST':
+            title = request.form.get('title')
+            body = request.form.get('body')
+            keywords = request.form.get('keywords')
+            student_id = session['s_id']
+
+            new_post = Post(title=title, body=body, keywords=keywords, student_id=student_id)
+            db.session.add(new_post)
+            db.session.commit()
+
+            keyword_list = [k.strip() for k in keywords.split(',') if k.strip()]
+
+            for keyword in keyword_list:
+                # Check if the tag already exists
+                tag = Tag.query.filter_by(name=keyword).first()
+                if not tag:
+                    tag = Tag(name=keyword)
+                    db.session.add(tag)
+
+                # Associate tag with the post
+                new_post.tags.append(tag)
+
+            db.session.commit()
+
+            flash("Post created successfully")
+            return redirect(url_for('index'))
+
+        return render_template('ASK_Anubhav/Student/create_post.html', username=username)
+
+    except Exception as e:
+        flash(f"An error occurred: {str(e)}", "danger")
+        return redirect(url_for('index'))
+
+
+# Route of post page to show individual post
+@app.route('/post/<int:post_id>')
+@student_required
+def post_details(post_id):
+    try:
+        if 's_id' not in session:
+            flash("Please log in to create a post")
+            return redirect(url_for('login'))
+
+        post = Post.query.get_or_404(post_id)
+
+        author = User.query.get(post.student_id)
+        posted_by = author.username if author else None
+
+        username = session.get('username')
+        user_liked = session.get('user_liked', False)
+
+        keyword_list = post.keywords.split(",") if post.keywords else []  # Splitting by commas
+        keywords = [keyword.strip() for keyword in keyword_list if keyword.strip()]  # Removing spaces & empty entries
+        post.keywords = keywords
+
+        return render_template('ASK_Anubhav/Student/post_details.html', post=post, username=username, user_liked=user_liked, posted_by=posted_by)
+
+    except Exception as e:
+        flash(f"An error occurred: {str(e)}", "danger")
+        return redirect(url_for('index'))
+
+
+# Route to like a post
+@app.route('/like/<int:post_id>', methods=['POST'])
+@student_required
+def like_post(post_id):
+    try:
+        if 's_id' not in session:
+            flash("Please log in to create a post")
+            return redirect(url_for('login'))
+
+        student_id = session.get('s_id')
+        post = Post.query.get_or_404(post_id)
+        user_liked = False
+
+        session.pop('user_liked', None)
+
+        # check if the post is already liked
+        already_liked = LikePost.query.filter_by(post_id=post_id, student_id=student_id).first()
+        if already_liked:
+            db.session.delete(already_liked)
+            post.like_count -= 1
+            user_liked = False
+            flash('unliked')
+        else:
+            like = LikePost(post_id=post_id, student_id=student_id)
+            post.like_count += 1
+            user_liked = True
+            db.session.add(like)
+            flash('liked')
+
+        db.session.commit()
+        print(f"User liked: {user_liked}")
+        session['user_liked'] = user_liked
+        return redirect(url_for('post_details', post_id=post_id))
+
+    except Exception as e:
+        flash(f"An error occurred: {str(e)}", "danger")
+        return redirect(url_for('index'))
+
+
+# Route to show a user's own posts
+@app.route('/my_posts')
+@student_required
+def my_posts():
+    try:
+        if 's_id' not in session:
+            flash("Please log in to view your posts.", "warning")
+            return redirect(url_for('login'))
+
+        student_id = session['s_id']  # Assuming you store user_id in session
+        my_posts = Post.query.filter_by(student_id=student_id).all()  # Fetch posts
+        total_posts = len(my_posts)
+
+        return render_template('ASK_Anubhav/Student/my_posts.html', posts=my_posts, total_posts=total_posts, username=session['username'])
+
+    except Exception as e:
+        flash(f"An error occurred while fetching your posts: {str(e)}", "danger")
+        return redirect(url_for('index'))  # Redirect to index or another appropriate page
+
+
+# Route to add questions
+@app.route("/questions", methods=["POST"])
+@student_required
+def add_question():
+    try:
+        if 's_id' not in session:
+            flash("Please log in first", "danger")
+            return redirect(url_for('login'))
+
+        data = request.form
+        title = data.get("title")
+        body = data.get("detail")
         student_id = session['s_id']
+        post_id = data.get("post_id")
 
-        new_post = Post(title=title, body=body, keywords=keywords, student_id=student_id)
-        db.session.add(new_post)
+        if not title or not body or not post_id:
+            flash("Title, detail, and post_id are required", "danger")
+            return redirect(url_for('post_details'))  # Replace with your actual create question page
+
+        new_question = Question(
+            title=title,
+            body=body,
+            student_id=student_id,
+            post_id=post_id
+        )
+
+        db.session.add(new_question)
         db.session.commit()
 
-        flash("Post created successfully")
-        # print("Post created succesffully")
-        return redirect(url_for('index'))
-    return render_template('ASK_Anubhav/Student/create_post.html', username=username)
+        flash("Question added successfully", "success")
+        return redirect(url_for('post_details', post_id=post_id))
+
+    except Exception as e:
+        flash(f"An error occurred: {str(e)}", "danger")
+        return redirect(url_for('post_details'))
 
 
-@app.route('/post/<int:post_id>')
-def post_details(post_id):
-    # print(session)
-    if 's_id' not in session:
-        flash("Please log in to create a post")
-        return redirect(url_for('login'))
-    post = Post.query.get_or_404(post_id)
-
-    author = User.query.get(post.student_id)
-    posted_by = author.username if author else None
-
-    username = session.get('username')
-    user_liked = session.get('user_liked', False)
-    # print(post.keywords)
-    keyword_list = post.keywords.split(",") if post.keywords else []  # list of keywords if any and splitting according to commas
-    no_space_keyword = [keyword.strip() for keyword in keyword_list]  # to strip spaces or anything empty
-    post.keywords = no_space_keyword
-    # print(post.keywords)
-    return render_template('ASK_Anubhav/Student/post_details.html', post=post, username=username, user_liked=user_liked, posted_by=posted_by)
-
-
-@app.route('/like/<int:post_id>', methods=['POST'])
-def like_post(post_id):
-    if 's_id' not in session:
-        flash("Please log in to create a post")
-        return redirect(url_for('login'))
-    student_id = session.get('s_id')
-    post = Post.query.get_or_404(post_id)
-    user_liked = False
-
-    # check if the post is already liked
-    already_liked = LikePost.query.filter_by(post_id=post_id, student_id=student_id).first()
-    if already_liked:
-        db.session.delete(already_liked)
-        post.like_count -= 1
-        user_liked = False
-        flash('unliked')
-    else:
-        like = LikePost(post_id=post_id, student_id=student_id)
-        post.like_count += 1
-        user_liked = True
-        db.session.add(like)
-        flash('liked')
-
-    db.session.commit()
-    print(f"User liked: {user_liked}")
-    session['user_liked'] = user_liked
-    return redirect(url_for('ASK_Anubhav/Student/post_details', post_id=post_id))
-
-
-@app.route('/my_posts')
-def my_posts():
-    if 's_id' not in session:
-        flash("Please log in to view your posts.", "warning")
-        return redirect(url_for('login'))
-
-    student_id = session['s_id']  # Assuming you store user_id in session
-    my_posts = Post.query.filter_by(student_id=student_id).all()  # Fetch posts
-    total_posts = len(my_posts)
-    return render_template('ASK_Anubhav/Student/my_posts.html', posts=my_posts, total_posts=total_posts, username=session['username'])
-
-# [Previous routes for create_post, post_details, like_post, my_posts remain the same]
-
-# New API routes
-
-
-@app.route("/api/questions", methods=["POST"])
-def add_question():
-    if 's_id' not in session:
-        return jsonify({"success": False, "error": "Please login first"}), 401
-
-    data = request.get_json()
-    title = data.get("title")
-    body = data.get("detail")
-    student_id = session['s_id']
-    post_id = data.get("post_id")
-
-    if not title or not body or not post_id:
-        return jsonify({"success": False, "error": "Title, detail and post_id are required"}), 400
-
-    new_question = Question(
-        title=title,
-        body=body,
-        student_id=student_id,
-        post_id=post_id
-    )
-
-    db.session.add(new_question)
-    db.session.commit()
-
-    return jsonify({"success": True, "question_id": new_question.id}), 201
-
-
-@app.route("/api/questions/<int:question_id>/like", methods=["PATCH"])
+# Route to like questions
+@app.route("/questions/<int:question_id>/like", methods=["POST"])
+@student_required
 def like_question(question_id):
-    if 's_id' not in session:
-        return jsonify({"success": False, "error": "Please login first"}), 401
+    try:
+        if 's_id' not in session:
+            flash("Please log in first", "warning")
+            return redirect(url_for('login'))
 
-    question = Question.query.get_or_404(question_id)
-    question.like_count += 1
-    db.session.commit()
+        question = Question.query.get_or_404(question_id)
+        question.like_count += 1
+        db.session.commit()
 
-    return jsonify({"success": True, "new_like_count": question.like_count}), 200
+        flash(f"Liked!", "success")
+        return redirect(url_for('', question_id=question_id))
+
+    except Exception as e:
+        flash(f"An error occurred while liking the question: {str(e)}", "danger")
+        return redirect(url_for('post_details', question_id=question_id))
 
 
 '''
@@ -450,6 +620,7 @@ with app.app_context():
         print("Database created successfully")
     except Exception as e:
         print(f"Error creating database: {e}")
+
 
 if __name__ == '__main__':
     app.run(debug=True)
