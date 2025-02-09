@@ -6,8 +6,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timezone
-from sqlalchemy import text
-
+from sqlalchemy import text, or_, func
 
 # Creating and initializing the flask app and the database
 app = Flask(__name__)
@@ -373,14 +372,36 @@ def logout():
 def index():
     try:
         if 's_id' not in session:
-            flash("Please login to access the dashboard")
+            flash("Please login to access the dashboard", "warning")
             return redirect(url_for('login'))
 
-        posts = Post.query.order_by(Post.date_of_post.desc()).all()
-        total_posts = len(posts)
+        page = request.args.get('page', 1, type=int)
+        per_page = 5
+
+        search_query = request.args.get('search', '').strip()
+
+        # Start with the base query
+        query = Post.query.order_by(Post.date_of_post.desc())
+
+        # Apply search filter if there's a search query
+        if search_query:
+            search_pattern = f"%{search_query}%"
+            query = query.filter(
+                or_(
+                    func.lower(Post.title).like(func.lower(search_pattern)),
+                    func.lower(Post.body).like(func.lower(search_pattern))
+                )
+            )
+
+        # Apply pagination after filtering
+        posts = query.paginate(page=page, per_page=per_page, error_out=False)
 
         username = session.get('username')
-        return render_template('ASK_Anubhav/Student/index.html', username=username, posts=posts, total_posts=total_posts)
+
+        return render_template('ASK_Anubhav/Student/index.html',
+                               username=username,
+                               posts=posts.items,
+                               pagination=posts)
 
     except Exception as e:
         flash(f"An error occurred: {str(e)}", "danger")
