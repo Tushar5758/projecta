@@ -3,7 +3,7 @@ from functools import wraps
 
 from flask import Flask, render_template, session, redirect, request, url_for, flash, jsonify
 from flask_sqlalchemy import SQLAlchemy
-from flask_migrate import Migrate
+# from flask_migrate import Migrate
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timezone
 from sqlalchemy import text, or_, func
@@ -242,18 +242,19 @@ def register():
 
             user = User.query.filter_by(username=username).first()
             if user:
-                flash("User already exists!")
+                flash("User already exists!", "danger")
                 return redirect(url_for('register'))
 
             new_user = User(username=username, password=hashed_password, email=email)
             db.session.add(new_user)
             db.session.commit()
 
-            flash("Registration successful, please login now!")
+            flash("Registration successful, please login now!", "success")
             return redirect(url_for('login'))
 
         except Exception as e:
-            flash(f"An error occurred: {str(e)}")
+            flash("An error occurred", "danger")
+            print(f"An error occurred: {str(e)}")
             return redirect(url_for('register'))
 
     return render_template('ASK_Anubhav/Student/register.html')
@@ -306,11 +307,11 @@ def login():
 
             session['s_id'] = user.student_id
             session['username'] = user.username
-            flash("Login successful")
+            flash("Login successful", "success")
             return redirect(url_for('index'))
 
         except Exception as e:
-            flash(f"An error occurred: {str(e)}")
+            print(f"An error occurred: {str(e)}")
             return redirect(url_for('login'))
 
     return render_template('ASK_Anubhav/Student/login.html')
@@ -333,6 +334,7 @@ def faculty_login():
 
         except Exception as e:
             error = f"An error occurred: {str(e)}"
+            print(error)
             return render_template("ASK_Anubhav/Faculty/faculty_login.html", error=error)
 
     return render_template("ASK_Anubhav/Faculty/faculty_login.html", error="")
@@ -349,6 +351,7 @@ def faculty_dashboard():
     except Exception as e:
         # Handling any unexpected errors
         error = f"An error occurred: {str(e)}"
+        print(error)
         return render_template("ASK_Anubhav/Faculty/faculty_dashboard.html")
 
 
@@ -362,7 +365,7 @@ def logout():
         return redirect(url_for('login'))
     except Exception as e:
         # Handling any unexpected errors
-        flash(f"An error occurred during logout: {str(e)}", "danger")
+        print(f"An error occurred during logout: {str(e)}", "danger")
         return redirect(url_for('login'))
 
 
@@ -404,7 +407,7 @@ def index():
                                pagination=posts)
 
     except Exception as e:
-        flash(f"An error occurred: {str(e)}", "danger")
+        print(f"An error occurred: {str(e)}", "danger")
         return redirect(url_for('login'))
 
 
@@ -414,7 +417,7 @@ def index():
 def create_post():
     try:
         if 's_id' not in session:
-            flash("Please log in to create a post")
+            flash("Please log in to create a post", "warning")
             return redirect(url_for('login'))
 
         username = session.get('username')
@@ -443,13 +446,14 @@ def create_post():
 
             db.session.commit()
 
-            flash("Post created successfully")
+            flash("Post created successfully", "success")
             return redirect(url_for('index'))
 
         return render_template('ASK_Anubhav/Student/create_post.html', username=username)
 
     except Exception as e:
-        flash(f"An error occurred: {str(e)}", "danger")
+        flash("An error occurred", "danger")
+        print(f"An error occurred: {str(e)}")
         return redirect(url_for('index'))
 
 
@@ -459,7 +463,7 @@ def create_post():
 def post_details(post_id):
     try:
         if 's_id' not in session:
-            flash("Please log in to create a post")
+            flash("Please log in to create a post", "warning")
             return redirect(url_for('login'))
 
         post = Post.query.get_or_404(post_id)
@@ -478,6 +482,7 @@ def post_details(post_id):
 
     except Exception as e:
         flash(f"An error occurred: {str(e)}", "danger")
+        print(f"An error occurred: {str(e)}")
         return redirect(url_for('index'))
 
 
@@ -487,7 +492,7 @@ def post_details(post_id):
 def like_post(post_id):
     try:
         if 's_id' not in session:
-            flash("Please log in to create a post")
+            flash("Please log in to create a post", "warning")
             return redirect(url_for('login'))
 
         student_id = session.get('s_id')
@@ -516,7 +521,8 @@ def like_post(post_id):
         return redirect(url_for('post_details', post_id=post_id))
 
     except Exception as e:
-        flash(f"An error occurred: {str(e)}", "danger")
+        flash("An error occurred", "danger")
+        print(f"An error occurred: {str(e)}")
         return redirect(url_for('index'))
 
 
@@ -537,6 +543,7 @@ def my_posts():
 
     except Exception as e:
         flash(f"An error occurred while fetching your posts: {str(e)}", "danger")
+        print("An error occurred while fetching your posts")
         return redirect(url_for('index'))  # Redirect to index or another appropriate page
 
 
@@ -546,7 +553,7 @@ def my_posts():
 def add_question():
     try:
         if 's_id' not in session:
-            flash("Please log in first", "danger")
+            flash("Please log in first", "warning")
             return redirect(url_for('login'))
 
         data = request.form
@@ -556,7 +563,7 @@ def add_question():
         post_id = data.get("post_id")
 
         if not title or not body or not post_id:
-            flash("Title, detail, and post_id are required", "danger")
+            flash("Title, detail, and post_id are required", "warning")
             return redirect(url_for('post_details'))  # Replace with your actual create question page
 
         new_question = Question(
@@ -573,7 +580,8 @@ def add_question():
         return redirect(url_for('post_details', post_id=post_id))
 
     except Exception as e:
-        flash(f"An error occurred: {str(e)}", "danger")
+        flash("An error occurred", "danger")
+        print(f"An error occurred: {str(e)}")
         return redirect(url_for('post_details'))
 
 
@@ -594,7 +602,8 @@ def like_question(question_id):
         return redirect(url_for('', question_id=question_id))
 
     except Exception as e:
-        flash(f"An error occurred while liking the question: {str(e)}", "danger")
+        flash("An error occurred", "danger")
+        print(f"An error occurred while liking the question: {str(e)}")
         return redirect(url_for('post_details', question_id=question_id))
 
 
