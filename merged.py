@@ -3,11 +3,10 @@ from functools import wraps
 
 from flask import Flask, render_template, session, redirect, request, url_for, flash, jsonify
 from flask_sqlalchemy import SQLAlchemy
-from flask_migrate import Migrate
+# from flask_migrate import Migrate
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timezone
-from sqlalchemy import text
-
+from sqlalchemy import text, or_, func
 
 # Creating and initializing the flask app and the database
 app = Flask(__name__)
@@ -208,6 +207,14 @@ def inject_session():
         print("Session not created due to: {str(e)}")
         return dict(session={})
 
+def is_faculty_email(email):
+    """Check if email belongs to faculty"""
+    return email.endswith('mes.ac.in') and not email.startswith('student.')
+
+def is_student_email(email):
+    """Check if email belongs to student"""
+    return email.endswith('student.mes.ac.in')
+
 
 # Student decorator
 def student_required(f):
@@ -235,29 +242,44 @@ def faculty_required(f):
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
+        username = request.form.get('username')
+        email = request.form.get('email')
+        password = request.form.get('password')
+        
+        # Validation checks
+        if User.query.filter_by(email=email).first():
+            flash('Email already registered')
+            return redirect(url_for('register'))
+        
+        if User.query.filter_by(username=username).first():
+            flash('Username already taken')
+            return redirect(url_for('register'))
+        
+        # Email domain validation
+        if not (is_faculty_email(email) or is_student_email(email)):
+            flash('Please use your institutional email (@mes.ac.in or @student.mes.ac.in)')
+            return redirect(url_for('register'))
+        
+        # Create new user with role based on email
+        new_user = User(
+            username=username,
+            email=email,
+            password=password,  # In production, use password hashing
+            is_faculty=is_faculty_email(email)
+        )
+        
         try:
-            username = request.form['username']
-            password = request.form['password']
-            email = request.form.get('email')
-            hashed_password = generate_password_hash(password)
-
-            user = User.query.filter_by(username=username).first()
-            if user:
-                flash("User already exists!")
-                return redirect(url_for('register'))
-
-            new_user = User(username=username, password=hashed_password, email=email)
             db.session.add(new_user)
             db.session.commit()
-
-            flash("Registration successful, please login now!")
+            flash('Registration successful! Please login.')
             return redirect(url_for('login'))
-
         except Exception as e:
-            flash(f"An error occurred: {str(e)}")
+            db.session.rollback()
+            flash('Registration failed. Please try again.')
             return redirect(url_for('register'))
-
+    
     return render_template('ASK_Anubhav/Student/register.html')
+
 
 @app.route('/leaderboard', methods=['GET', 'POST'])
 def leaderboard():
@@ -296,24 +318,28 @@ def leaderboard():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        try:
-            username = request.form.get('username')
-            password = request.form.get('password')
-
-            user = User.query.filter_by(username=username).first()
-            if not user or not check_password_hash(user.password, password):
-                flash('Invalid details')
-                return redirect(url_for('login'))
-
-            session['s_id'] = user.student_id
-            session['username'] = user.username
-            flash("Login successful")
-            return redirect(url_for('index'))
-
-        except Exception as e:
-            flash(f"An error occurred: {str(e)}")
+        email = request.form.get('email')
+        password = request.form.get('password')
+        
+        user = User.query.filter_by(email=email).first()
+        
+        if not user:
+            flash('Email not registered')
             return redirect(url_for('login'))
-
+        
+        if user.password != password:  # In production, use proper password verification
+            flash('Incorrect password')
+            return redirect(url_for('login'))
+        
+        # Set session data
+        session['user_id'] = user.student_id
+        session['username'] = user.username
+        session['is_faculty'] = user.is_faculty
+        session['email'] = user.email
+        
+        flash(f'Welcome back, {user.username}!')
+        return redirect(url_for('index'))
+    
     return render_template('ASK_Anubhav/Student/login.html')
 
 
@@ -334,6 +360,7 @@ def faculty_login():
 
         except Exception as e:
             error = f"An error occurred: {str(e)}"
+            print(error)
             return render_template("ASK_Anubhav/Faculty/faculty_login.html", error=error)
 
     return render_template("ASK_Anubhav/Faculty/faculty_login.html", error="")
@@ -350,7 +377,45 @@ def faculty_dashboard():
     except Exception as e:
         # Handling any unexpected errors
         error = f"An error occurred: {str(e)}"
+        print(error)
         return render_template("ASK_Anubhav/Faculty/faculty_dashboard.html")
+
+@app.route('/approve_post/<int:post_id>')
+@faculty_required
+def approve_post(post_id):
+    post = Post.query.get_or_404(post_id)
+    
+    approval = PostApproval(
+        post_id=post_id,
+        status='approved',
+        approver_id=session['user_id'],
+        approval_date=datetime.utcnow()
+    )
+    
+    db.session.add(approval)
+    db.session.commit()
+    
+    flash('Post approved successfully')
+    return redirect(url_for('index'))
+
+@app.route('/reject_post/<int:post_id>')
+@faculty_required
+def reject_post(post_id):
+    post = Post.query.get_or_404(post_id)
+    
+    approval = PostApproval(
+        post_id=post_id,
+        status='rejected',
+        approver_id=session['user_id'],
+        approval_date=datetime.utcnow()
+    )
+    
+    db.session.add(approval)
+    db.session.delete(post)
+    db.session.commit()
+    
+    flash('Post rejected and deleted')
+    return redirect(url_for('index'))
 
 
 # Route for logging out
@@ -363,7 +428,7 @@ def logout():
         return redirect(url_for('login'))
     except Exception as e:
         # Handling any unexpected errors
-        flash(f"An error occurred during logout: {str(e)}", "danger")
+        print(f"An error occurred during logout: {str(e)}", "danger")
         return redirect(url_for('login'))
 
 
@@ -373,17 +438,39 @@ def logout():
 def index():
     try:
         if 's_id' not in session:
-            flash("Please login to access the dashboard")
+            flash("Please login to access the dashboard", "warning")
             return redirect(url_for('login'))
 
-        posts = Post.query.order_by(Post.date_of_post.desc()).all()
-        total_posts = len(posts)
+        page = request.args.get('page', 1, type=int)
+        per_page = 5
+
+        search_query = request.args.get('search', '').strip()
+
+        # Start with the base query
+        query = Post.query.order_by(Post.date_of_post.desc())
+
+        # Apply search filter if there's a search query
+        if search_query:
+            search_pattern = f"%{search_query}%"
+            query = query.filter(
+                or_(
+                    func.lower(Post.title).like(func.lower(search_pattern)),
+                    func.lower(Post.body).like(func.lower(search_pattern))
+                )
+            )
+
+        # Apply pagination after filtering
+        posts = query.paginate(page=page, per_page=per_page, error_out=False)
 
         username = session.get('username')
-        return render_template('ASK_Anubhav/Student/index.html', username=username, posts=posts, total_posts=total_posts)
+
+        return render_template('ASK_Anubhav/Student/index.html',
+                               username=username,
+                               posts=posts.items,
+                               pagination=posts)
 
     except Exception as e:
-        flash(f"An error occurred: {str(e)}", "danger")
+        print(f"An error occurred: {str(e)}", "danger")
         return redirect(url_for('login'))
 
 
@@ -393,7 +480,7 @@ def index():
 def create_post():
     try:
         if 's_id' not in session:
-            flash("Please log in to create a post")
+            flash("Please log in to create a post", "warning")
             return redirect(url_for('login'))
 
         username = session.get('username')
@@ -422,13 +509,14 @@ def create_post():
 
             db.session.commit()
 
-            flash("Post created successfully")
+            flash("Post created successfully", "success")
             return redirect(url_for('index'))
 
         return render_template('ASK_Anubhav/Student/create_post.html', username=username)
 
     except Exception as e:
-        flash(f"An error occurred: {str(e)}", "danger")
+        flash("An error occurred", "danger")
+        print(f"An error occurred: {str(e)}")
         return redirect(url_for('index'))
 
 
@@ -438,7 +526,7 @@ def create_post():
 def post_details(post_id):
     try:
         if 's_id' not in session:
-            flash("Please log in to create a post")
+            flash("Please log in to create a post", "warning")
             return redirect(url_for('login'))
 
         post = Post.query.get_or_404(post_id)
@@ -457,6 +545,7 @@ def post_details(post_id):
 
     except Exception as e:
         flash(f"An error occurred: {str(e)}", "danger")
+        print(f"An error occurred: {str(e)}")
         return redirect(url_for('index'))
 
 
@@ -466,7 +555,7 @@ def post_details(post_id):
 def like_post(post_id):
     try:
         if 's_id' not in session:
-            flash("Please log in to create a post")
+            flash("Please log in to create a post", "warning")
             return redirect(url_for('login'))
 
         student_id = session.get('s_id')
@@ -495,7 +584,8 @@ def like_post(post_id):
         return redirect(url_for('post_details', post_id=post_id))
 
     except Exception as e:
-        flash(f"An error occurred: {str(e)}", "danger")
+        flash("An error occurred", "danger")
+        print(f"An error occurred: {str(e)}")
         return redirect(url_for('index'))
 
 
@@ -516,6 +606,7 @@ def my_posts():
 
     except Exception as e:
         flash(f"An error occurred while fetching your posts: {str(e)}", "danger")
+        print("An error occurred while fetching your posts")
         return redirect(url_for('index'))  # Redirect to index or another appropriate page
 
 
@@ -525,7 +616,7 @@ def my_posts():
 def add_question():
     try:
         if 's_id' not in session:
-            flash("Please log in first", "danger")
+            flash("Please log in first", "warning")
             return redirect(url_for('login'))
 
         data = request.form
@@ -535,7 +626,7 @@ def add_question():
         post_id = data.get("post_id")
 
         if not title or not body or not post_id:
-            flash("Title, detail, and post_id are required", "danger")
+            flash("Title, detail, and post_id are required", "warning")
             return redirect(url_for('post_details'))  # Replace with your actual create question page
 
         new_question = Question(
@@ -552,7 +643,8 @@ def add_question():
         return redirect(url_for('post_details', post_id=post_id))
 
     except Exception as e:
-        flash(f"An error occurred: {str(e)}", "danger")
+        flash("An error occurred", "danger")
+        print(f"An error occurred: {str(e)}")
         return redirect(url_for('post_details'))
 
 
@@ -573,7 +665,8 @@ def like_question(question_id):
         return redirect(url_for('', question_id=question_id))
 
     except Exception as e:
-        flash(f"An error occurred while liking the question: {str(e)}", "danger")
+        flash("An error occurred", "danger")
+        print(f"An error occurred while liking the question: {str(e)}")
         return redirect(url_for('post_details', question_id=question_id))
 
 
