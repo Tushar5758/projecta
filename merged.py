@@ -207,57 +207,82 @@ def inject_session():
         print("Session not created due to: {str(e)}")
         return dict(session={})
 
+def get_user_role(email):
+    """Determine role based on email domain."""
+    return "student" if email.endswith("student.mes.ac.in") else "faculty"
 
-# Student decorator
+
 def student_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if 's_id' not in session:  # Check if student is logged in
-            flash("Please log in as a student to access this page.", "warning")
-            return redirect(url_for('login'))  # Redirect to login page
-        return f(*args, **kwargs)  # If logged in, proceed with the route
+        if session.get('is_role') != "student":
+            flash("Access restricted to students only!", "danger")
+            return redirect(url_for('index'))  # Redirect to homepage
+        return f(*args, **kwargs)
     return decorated_function
 
 
-# Faculty decorator
-def faculty_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'faculty_email' not in session:  # Check if faculty is logged in
-            flash("Please log in as a faculty member to access this page.", "warning")
-            return redirect(url_for('faculty_login'))  # Redirect to faculty login page
-        return f(*args, **kwargs)  # If logged in, proceed with the route
-    return decorated_function
-
-
-# Route for registration
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
         try:
-            username = request.form['username']
-            password = request.form['password']
+            username = request.form.get('username')
             email = request.form.get('email')
-            hashed_password = generate_password_hash(password)
+            password = request.form.get('password')
 
-            user = User.query.filter_by(username=username).first()
-            if user:
-                flash("User already exists!", "danger")
+       
+            if User.query.filter_by(email=email).first():
+                flash('Email already registered', 'danger')
                 return redirect(url_for('register'))
 
-            new_user = User(username=username, password=hashed_password, email=email)
-            db.session.add(new_user)
-            db.session.commit()
+            if User.query.filter_by(username=username).first():
+                flash('Username already taken', 'danger')
+                return redirect(url_for('register'))
 
-            flash("Registration successful, please login now!", "success")
-            return redirect(url_for('login'))
+            if not email.endswith(('mes.ac.in', 'student.mes.ac.in')):
+                flash('Please use institutional email (@mes.ac.in or @student.mes.ac.in)', 'warning')
+                return redirect(url_for('register'))
 
         except Exception as e:
             flash("An error occurred", "danger")
             print(f"An error occurred: {str(e)}")
-            return redirect(url_for('register'))
+            
+
+        
+        new_user = User(username=username, email=email, password=password, role=get_user_role(email))
+        db.session.add(new_user)
+        db.session.commit()
+
+        flash('Registration successful! Please login.', 'success')
+        return redirect(url_for('login'))
 
     return render_template('ASK_Anubhav/Student/register.html')
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        email = request.form.get('email')
+        password = request.form.get('password')
+
+        user = User.query.filter_by(email=email).first()
+
+        if not user or user.password != password:  
+            flash('Invalid email or password', 'danger')
+            return redirect(url_for('login'))
+
+        # Set session
+        session['user_id'] = user.id
+        session['username'] = user.username
+        session['is_role'] = user.role  
+        session['email'] = user.email
+
+        flash(f'Welcome back, {user.username}!', 'success')
+
+        return redirect(url_for('faculty_posts' if user.role == "faculty" else 'index'))
+
+    return render_template('ASK_Anubhav/Student/login.html')
+
+
 
 @app.route('/leaderboard', methods=['GET', 'POST'])
 def leaderboard():
@@ -292,6 +317,7 @@ def leaderboard():
 
     return render_template('ASK_Anubhav/Student/leaderboard.html', leaderboard_data=leaderboard_data, sort_option=sort_option)
 
+
 # Route for login
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -314,50 +340,58 @@ def login():
             print(f"An error occurred: {str(e)}")
             return redirect(url_for('login'))
 
-    return render_template('ASK_Anubhav/Student/login.html')
-
-
-# Route for faculty login
-@app.route("/faculty/login", methods=["GET", "POST"])
-def faculty_login():
-    if request.method == "POST":
-        try:
-            email = request.form.get("email")
-            password = request.form.get("password")
-
-            if email in FACULTY_CREDENTIALS and FACULTY_CREDENTIALS[email] == password:
-                session['faculty_email'] = email
-                return redirect(url_for("faculty_dashboard"))
-            else:
-                error = "Invalid email or password."
-                return render_template("ASK_Anubhav/Faculty/faculty_login.html", error=error)
-
-        except Exception as e:
-            error = f"An error occurred: {str(e)}"
-            print(error)
-            return render_template("ASK_Anubhav/Faculty/faculty_login.html", error=error)
-
-    return render_template("ASK_Anubhav/Faculty/faculty_login.html", error="")
-
-
-# Route for faculty dashboard
 @app.route("/faculty/dashboard")
-@faculty_required
 def faculty_dashboard():
-    try:
-        if 'faculty_email' not in session:
-            return redirect(url_for("faculty_login"))
-        return render_template("ASK_Anubhav/Faculty/faculty_dashboard.html")
-    except Exception as e:
-        # Handling any unexpected errors
-        error = f"An error occurred: {str(e)}"
-        print(error)
-        return render_template("ASK_Anubhav/Faculty/faculty_dashboard.html")
+    return render_template("ASK_Anubhav/Faculty/faculty_dashboard.html")
 
+
+# Faculty Post Management
+@app.route('/approve_post/<int:post_id>')
+def approve_post(post_id):
+    post = Post.query.get_or_404(post_id)
+
+    approval = PostApproval(
+        post_id=post_id,
+        status='approved',
+        approver_id=session['user_id'],
+        approval_date=datetime.utcnow()
+    )
+
+    db.session.add(approval)
+    db.session.commit()
+
+    flash('Post approved successfully', 'success')
+    return redirect(url_for('faculty_posts'))
+
+
+@app.route('/reject_post/<int:post_id>')
+def reject_post(post_id):
+    post = Post.query.get_or_404(post_id)
+
+    approval = PostApproval(
+        post_id=post_id,
+        status='rejected',
+        approver_id=session['user_id'],
+        approval_date=datetime.utcnow()
+    )
+
+    db.session.add(approval)
+    db.session.delete(post)
+    db.session.commit()
+
+    flash('Post rejected and deleted', 'danger')
+    return redirect(url_for('faculty_posts'))
+
+
+# Faculty Posts Page
+@app.route('/faculty/posts')
+def faculty_posts():
+    posts = Post.query.all()
+    return render_template("ASK_Anubhav/Faculty/faculty_posts.html", posts=posts)
 
 # Route for logging out
 @app.route('/logout')
-@student_required
+@login_required
 def logout():
     try:
         session.clear()
