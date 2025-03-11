@@ -212,16 +212,6 @@ def get_user_role(email):
     return "student" if email.endswith("student.mes.ac.in") else "faculty"
 
 
-# Decorator to check if user is logged in
-def login_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
-            flash("Please log in to access this page.", "warning")
-            return redirect(url_for('login'))
-        return f(*args, **kwargs)
-    return decorated_function
-
 def student_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -232,38 +222,31 @@ def student_required(f):
     return decorated_function
 
 
-# Role-based access decorator
-def role_required(role):
-    def decorator(f):
-        @wraps(f)
-        def wrapped_function(*args, **kwargs):
-            if session.get('is_role') != role:
-                flash("Access denied!", "danger")
-                return redirect(url_for('index'))
-            return f(*args, **kwargs)
-        return wrapped_function
-    return decorator
-
-
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
-        username = request.form.get('username')
-        email = request.form.get('email')
-        password = request.form.get('password')
+        try:
+            username = request.form.get('username')
+            email = request.form.get('email')
+            password = request.form.get('password')
 
        
-        if User.query.filter_by(email=email).first():
-            flash('Email already registered', 'danger')
-            return redirect(url_for('register'))
+            if User.query.filter_by(email=email).first():
+                flash('Email already registered', 'danger')
+                return redirect(url_for('register'))
 
-        if User.query.filter_by(username=username).first():
-            flash('Username already taken', 'danger')
-            return redirect(url_for('register'))
+            if User.query.filter_by(username=username).first():
+                flash('Username already taken', 'danger')
+                return redirect(url_for('register'))
 
-        if not email.endswith(('mes.ac.in', 'student.mes.ac.in')):
-            flash('Please use institutional email (@mes.ac.in or @student.mes.ac.in)', 'warning')
-            return redirect(url_for('register'))
+            if not email.endswith(('mes.ac.in', 'student.mes.ac.in')):
+                flash('Please use institutional email (@mes.ac.in or @student.mes.ac.in)', 'warning')
+                return redirect(url_for('register'))
+
+        except Exception as e:
+            flash("An error occurred", "danger")
+            print(f"An error occurred: {str(e)}")
+            
 
         
         new_user = User(username=username, email=email, password=password, role=get_user_role(email))
@@ -334,17 +317,36 @@ def leaderboard():
 
     return render_template('ASK_Anubhav/Student/leaderboard.html', leaderboard_data=leaderboard_data, sort_option=sort_option)
 
+
+# Route for login
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        try:
+            username = request.form.get('username')
+            password = request.form.get('password')
+
+            user = User.query.filter_by(username=username).first()
+            if not user or not check_password_hash(user.password, password):
+                flash('Invalid details')
+                return redirect(url_for('login'))
+
+            session['s_id'] = user.student_id
+            session['username'] = user.username
+            flash("Login successful", "success")
+            return redirect(url_for('index'))
+
+        except Exception as e:
+            print(f"An error occurred: {str(e)}")
+            return redirect(url_for('login'))
+
 @app.route("/faculty/dashboard")
-@login_required
-@role_required('faculty')
 def faculty_dashboard():
     return render_template("ASK_Anubhav/Faculty/faculty_dashboard.html")
 
 
 # Faculty Post Management
 @app.route('/approve_post/<int:post_id>')
-@login_required
-@role_required('faculty')
 def approve_post(post_id):
     post = Post.query.get_or_404(post_id)
 
@@ -363,8 +365,6 @@ def approve_post(post_id):
 
 
 @app.route('/reject_post/<int:post_id>')
-@login_required
-@role_required('faculty')
 def reject_post(post_id):
     post = Post.query.get_or_404(post_id)
 
@@ -383,19 +383,8 @@ def reject_post(post_id):
     return redirect(url_for('faculty_posts'))
 
 
-# Student Homepage
-@app.route('/')
-@login_required
-@role_required('student')
-def index():
-    posts = Post.query.filter_by(student_id=session['user_id']).all()
-    return render_template('ASK_Anubhav/Student/index.html', posts=posts)
-
-
 # Faculty Posts Page
 @app.route('/faculty/posts')
-@login_required
-@role_required('faculty')
 def faculty_posts():
     posts = Post.query.all()
     return render_template("ASK_Anubhav/Faculty/faculty_posts.html", posts=posts)
@@ -404,9 +393,14 @@ def faculty_posts():
 @app.route('/logout')
 @login_required
 def logout():
-    session.clear()
-    flash("You have been logged out.", "info")
-    return redirect(url_for('login'))
+    try:
+        session.clear()
+        flash("You have been logged out", "info")
+        return redirect(url_for('login'))
+    except Exception as e:
+        # Handling any unexpected errors
+        print(f"An error occurred during logout: {str(e)}", "danger")
+        return redirect(url_for('login'))
 
 
 # Route for student home page where the posts are shown

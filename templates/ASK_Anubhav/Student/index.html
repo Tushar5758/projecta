@@ -27,6 +27,10 @@
                         <a class="nav-link" aria-current="page" href="{{ url_for('my_posts') }}">My Posts</a>
                     </li>
                 </ul>
+                <form class="d-flex mb-3" method="GET" action="{{ url_for('index') }}">
+                    <input class="form-control me-2" type="search" name="search" placeholder="Search" value="{{ search_query }}" aria-label="Search">
+                    <button class="btn btn-outline-success" type="submit">Search</button>
+                </form>
                 <!-- Right-aligned username dropdown -->
                 <ul class="navbar-nav">
                     <li class="nav-item dropdown">
@@ -168,11 +172,66 @@
       {% endif %}
     </div>
 
+    <!-- Pagination Controls -->
+<nav>
+    <ul class="pagination justify-content-center">
+        {% if pagination.has_prev %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('index', page=pagination.prev_num) }}">Previous</a>
+            </li>
+        {% endif %}
+
+        {% for num in pagination.iter_pages() %}
+            {% if num %}
+                {% if num == pagination.page %}
+                    <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                {% else %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('index', page=num) }}">{{ num }}</a>
+                    </li>
+                {% endif %}
+            {% else %}
+                <li class="page-item disabled"><span class="page-link">...</span></li>
+            {% endif %}
+        {% endfor %}
+
+        {% if pagination.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('index', page=pagination.next_num) }}">Next</a>
+            </li>
+        {% endif %}
+    </ul>
+</nav>
+<div class="toast-container position-fixed top-0 start-50 translate-middle-x mt-3">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+      <div class="toast" id="like-toast" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="toast-header">
+            <strong class="me-auto">ASK Anubhav</strong>
+            <small>now</small>
+            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+        <div class="toast-body">
+            {{ message }}
+        </div>
+    </div>
+      {% endfor %}
+  {% endwith %}
+</div>
     <script src="/static/ASK_Anubhav/Student/script.js"></script>
     <script
       src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
       integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
       crossorigin="anonymous"
     ></script>
+    <script>
+      document.addEventListener("DOMContentLoaded", function() {
+          var toastElList = [].slice.call(document.querySelectorAll('.toast'));
+          var toastList = toastElList.map(function(toastEl) {
+              return new bootstrap.Toast(toastEl);
+          });
+          toastList.forEach(toast => toast.show());
+      });
+  </script>
   </body>
 </html>
