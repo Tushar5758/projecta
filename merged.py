@@ -334,13 +334,12 @@ def index():
             )
         )
     else:
-        # Without search query
+      
         posts_query = Post.query.outerjoin(
             PostApproval, 
             Post.id == PostApproval.post_id
         )
     
-    # For non-faculty users, only show approved posts or their own posts
     if not session.get('is_faculty'):
         posts_query = posts_query.filter(
             or_(
@@ -486,19 +485,18 @@ def approve_post(post_id):
                 approver_id=session.get('student_id'),
                 approval_date=datetime.now()
             )
-            db.session.add(approval)  # ✅ Add the new record to session
+            db.session.add(approval)  
         
-        db.session.commit()  # ✅ Commit changes to the database
+        db.session.commit()
 
         flash('Post approved successfully!', 'success')
 
     except Exception as e:
-        db.session.rollback()  # ✅ Rollback if an error occurs
+        db.session.rollback() 
         flash(f'Error: {str(e)}', 'danger')
 
     finally:
-        db.session.close()  # ✅ Close session to prevent database locks
-
+        db.session.close()  
     return redirect(url_for('index'))
 
 # Route to reject a post
@@ -535,19 +533,18 @@ def reject_post(post_id):
                 approver_id=session.get('student_id'),
                 approval_date=datetime.now()
             )
-            db.session.add(approval)  # ✅ Add the new record to session
+            db.session.add(approval)  
         
-        db.session.commit()  # ✅ Commit changes to the database
+        db.session.commit()  
 
         flash('Post rejected successfully!', 'success')
 
     except Exception as e:
-        db.session.rollback()  # ✅ Rollback if an error occurs
+        db.session.rollback() 
         flash(f'Error: {str(e)}', 'danger')
 
     finally:
-        db.session.close()  # ✅ Close session to prevent database locks
-
+        db.session.close() 
     return redirect(url_for('index'))
 
 # # Faculty Posts Page
