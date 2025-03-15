@@ -7,6 +7,8 @@ from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timezone
 from sqlalchemy import text, or_, func
+# from merged import db 
+
 
 # Creating and initializing the flask app and the database
 app = Flask(__name__)
@@ -15,11 +17,11 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///askanubhav.db'
 db = SQLAlchemy(app)
 
 
-# Faculty credentials dictionary
-FACULTY_CREDENTIALS = {
-    "faculty1@gmail.com": "password123",
-    "faculty2@gmail.com": "pass456"
-}
+# # Faculty credentials dictionary
+# FACULTY_CREDENTIALS = {
+#     "faculty1@gmail.com": "password123",
+#     "faculty2@gmail.com": "pass456"
+# }
 
 
 # Database Models
@@ -37,6 +39,9 @@ class User(db.Model):
     is_faculty = db.Column(db.Boolean, default=False)
     email = db.Column(db.String(120), unique=True)
 
+    def __repr__(self):
+        return f'<User {self.username}>'
+
 
 # Post table with the details
 class Post(db.Model):
@@ -52,6 +57,7 @@ class Post(db.Model):
 
     tags = db.relationship('Tag', secondary=post_tags, lazy='subquery', backref=db.backref('posts', lazy=True))
     approval = db.relationship('PostApproval', uselist=False, back_populates='post')
+
 
     def __repr__(self):
         return f'<Post {self.title}>'
@@ -69,8 +75,9 @@ class Question(db.Model):
     post_id = db.Column(db.Integer, db.ForeignKey('post.id'), nullable=False)
     post = db.relationship('Post', backref=db.backref('questions', lazy=True))
 
-    answers = db.relationship('Answer', backref='question_reference', lazy=True)
     approval = db.relationship('QuestionApproval', uselist=False, back_populates='question')
+    answers = db.relationship('Answer', backref='question', lazy=True)
+
 
     def __repr__(self):
         return f'<Question {self.body[:30]}>'
@@ -82,11 +89,13 @@ class Answer(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     body = db.Column(db.Text, nullable=False)
-    student_id = db.Column(db.Integer, nullable=False)
+    # Change this line to reference the User table instead of a non-existent student table
+    student_id = db.Column(db.Integer, db.ForeignKey('user.student_id'), nullable=False)
+    student = db.relationship('User', backref=db.backref('answers', lazy=True))
+    
     like_count = db.Column(db.Integer, default=0)
     question_id = db.Column(db.Integer, db.ForeignKey('question.id'), nullable=False)
 
-    question = db.relationship('Question', backref='answer_reference', lazy=True)
     approval = db.relationship('AnswerApproval', uselist=False, back_populates='answer')
 
     def __repr__(self):
@@ -212,6 +221,27 @@ def get_user_role(email):
     return "student" if email.endswith("student.mes.ac.in") else "faculty"
 
 
+
+@app.template_filter('datetime')
+def format_datetime(value):
+    if not value:
+        return ""
+    # If value is a string, try to convert it to a datetime object
+    if isinstance(value, str):
+        try:
+            # Handle ISO format
+            value = datetime.fromisoformat(value.replace('Z', '+00:00'))
+        except Exception:
+            try:
+                # Try other common date formats
+                value = datetime.strptime(value, '%Y-%m-%d %H:%M:%S')
+            except Exception:
+                # If all conversions fail, return the original string
+                return value
+    return value.strftime('%b %d, %Y')
+
+
+
 def student_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -221,177 +251,313 @@ def student_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+app.route('/')
+def home():
+    if 'username' in session:
+        return redirect(url_for('index'))
+    return redirect(url_for('login'))
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
-        try:
-            username = request.form.get('username')
-            email = request.form.get('email')
-            password = request.form.get('password')
-
-       
-            if User.query.filter_by(email=email).first():
-                flash('Email already registered', 'danger')
-                return redirect(url_for('register'))
-
-            if User.query.filter_by(username=username).first():
-                flash('Username already taken', 'danger')
-                return redirect(url_for('register'))
-
-            if not email.endswith(('mes.ac.in', 'student.mes.ac.in')):
-                flash('Please use institutional email (@mes.ac.in or @student.mes.ac.in)', 'warning')
-                return redirect(url_for('register'))
-
-        except Exception as e:
-            flash("An error occurred", "danger")
-            print(f"An error occurred: {str(e)}")
-            
-
+        username = request.form['username']
+        password = request.form['password']
+        email = request.form['email']
         
-        new_user = User(username=username, email=email, password=password, role=get_user_role(email))
-        db.session.add(new_user)
-        db.session.commit()
-
-        flash('Registration successful! Please login.', 'success')
-        return redirect(url_for('login'))
-
+        # Check if username or email already exists
+        existing_user = User.query.filter_by(username=username).first()
+        if existing_user:
+            flash('Username already exists')
+            return redirect(url_for('register'))
+        
+        existing_email = User.query.filter_by(email=email).first()
+        if existing_email:
+            flash('Email already exists')
+            return redirect(url_for('register'))
+        
+        # Determine if faculty or student based on email domain
+        is_faculty = not email.endswith('student.mes.ac.in')
+        
+        # Create new user
+        hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
+        new_user = User(username=username, password=hashed_password, is_faculty=is_faculty, email=email)
+        
+        try:
+            db.session.add(new_user)
+            db.session.commit()
+            flash('Registration successful! Please log in.')
+            return redirect(url_for('login'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error: {str(e)}')
+            return redirect(url_for('register'))
+    
     return render_template('ASK_Anubhav/Student/register.html')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        email = request.form.get('email')
-        password = request.form.get('password')
-
-        user = User.query.filter_by(email=email).first()
-
-        if not user or user.password != password:  
-            flash('Invalid email or password', 'danger')
+        username = request.form['username']
+        password = request.form['password']
+        
+        user = User.query.filter_by(username=username).first()
+        
+        if user and check_password_hash(user.password, password):
+            session['username'] = user.username
+            session['is_faculty'] = user.is_faculty
+            session['student_id'] = user.student_id
+            flash('Logged in successfully!')
+            return redirect(url_for('index'))  # This will redirect to the index route
+        else:
+            flash('Invalid username or password')
             return redirect(url_for('login'))
+    
+    return render_template('ASK_Anubhav/Student/login.html')  # Corrected template path
 
-        # Set session
-        session['user_id'] = user.id
-        session['username'] = user.username
-        session['is_role'] = user.role  
-        session['email'] = user.email
+@app.route('/index')
+@app.route('/')
+def index():
+    page = request.args.get('page', 1, type=int)
+    search_query = request.args.get('search', '')
+    
+    # Join Post with PostApproval to filter by status
+    if search_query:
+        # With search query
+        posts_query = Post.query.outerjoin(
+            PostApproval, 
+            Post.id == PostApproval.post_id
+        ).filter(
+            or_(
+                Post.title.contains(search_query),
+                Post.body.contains(search_query),
+                Post.keywords.contains(search_query)
+            )
+        )
+    else:
+        # Without search query
+        posts_query = Post.query.outerjoin(
+            PostApproval, 
+            Post.id == PostApproval.post_id
+        )
+    
+    # For non-faculty users, only show approved posts or their own posts
+    if not session.get('is_faculty'):
+        posts_query = posts_query.filter(
+            or_(
+                PostApproval.status == "Approved",
+                Post.student_id == session.get('student_id', 0)
+            )
+        )
+        
+    # Order by newest first
+    posts_query = posts_query.order_by(Post.date_of_post.desc())
+   
+    pagination = posts_query.paginate(page=page, per_page=10)
+    posts = pagination.items
+    
+    return render_template(
+        'ASK_Anubhav/Student/index.html', 
+        posts=posts, 
+        pagination=pagination,
+        total_posts=posts_query.count(),
+        search_query=search_query,
+        username=session.get('username', 'Guest')
+    )
+# @app.route('/logout')
+# def logout():
+#     session.pop('username', None)
+#     session.pop('is_faculty', None)
+#     session.pop('student_id', None)
+#     flash('Logged out successfully!')
+#     return redirect(url_for('login'))
 
-        flash(f'Welcome back, {user.username}!', 'success')
+# @app.route('/register', methods=['GET', 'POST'])
+# def register():
+#     if request.method == 'POST':
+#         try:
+#             username = request.form.get('username')
+#             email = request.form.get('email')
+#             password = request.form.get('password')
 
-        return redirect(url_for('faculty_posts' if user.role == "faculty" else 'index'))
+       
+#             if User.query.filter_by(email=email).first():
+#                 flash('Email already registered', 'danger')
+#                 return redirect(url_for('register'))
 
-    return render_template('ASK_Anubhav/Student/login.html')
+#             if User.query.filter_by(username=username).first():
+#                 flash('Username already taken', 'danger')
+#                 return redirect(url_for('register'))
+
+#             if not email.endswith(('mes.ac.in', 'student.mes.ac.in')):
+#                 flash('Please use institutional email (@mes.ac.in or @student.mes.ac.in)', 'warning')
+#                 return redirect(url_for('register'))
+
+#         except Exception as e:
+#             flash("An error occurred", "danger")
+#             print(f"An error occurred: {str(e)}")
+            
+
+        
+#         new_user = User(username=username, email=email, password=password, role=get_user_role(email))
+#         db.session.add(new_user)
+#         db.session.commit()
+
+#         flash('Registration successful! Please login.', 'success')
+#         return redirect(url_for('login'))
+
+#     return render_template('ASK_Anubhav/Student/register.html')
+
+# @app.route('/login', methods=['GET', 'POST'])
+# def login():
+#     if request.method == 'POST':
+#         email = request.form.get('email')
+#         password = request.form.get('password')
+
+#         user = User.query.filter_by(email=email).first()
+
+#         if not user or user.password != password:  
+#             flash('Invalid email or password', 'danger')
+#             return redirect(url_for('login'))
+
+#         # Set session
+#         session['user_id'] = user.id
+#         session['username'] = user.username
+#         session['is_role'] = user.role  
+#         session['email'] = user.email
+
+#         flash(f'Welcome back, {user.username}!', 'success')
+
+#         return redirect(url_for('faculty_posts' if user.role == "faculty" else 'index'))
+
+#     return render_template('ASK_Anubhav/Student/login.html')
 
 
-
-@app.route('/leaderboard', methods=['GET', 'POST'])
-def leaderboard():
-    sort_option = request.form.get('sort', 'overall')  # Default to 'overall'
-
-    # Base query to calculate total likes per user from the post table
-    query = text("""
-        SELECT u.student_id, u.username, COALESCE(SUM(p.like_count), 0) AS total_likes
-        FROM user u
-        LEFT JOIN post p ON u.student_id = p.student_id
-    """)
-
-    # Apply filter if 'monthly' is selected
-    if sort_option == 'monthly':
-        query = text("""
-            SELECT u.student_id, u.username, COALESCE(SUM(p.like_count), 0) AS total_likes
-            FROM user u
-            LEFT JOIN post p ON u.student_id = p.student_id 
-            WHERE strftime('%Y-%m', p.date_of_post) = strftime('%Y-%m', 'now')
-        """)
-
-    query = text(query.text + " GROUP BY u.student_id ORDER BY total_likes DESC")
-
-    # Execute query
-    result = db.session.execute(query).fetchall()
-
-    # Format leaderboard data
-    leaderboard_data = [
-        {'rank': idx + 1, 'user': row.username, 'likes': row.total_likes}
-        for idx, row in enumerate(result)
-    ]
-
-    return render_template('ASK_Anubhav/Student/leaderboard.html', leaderboard_data=leaderboard_data, sort_option=sort_option)
 
 
 # Route for login
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        try:
-            username = request.form.get('username')
-            password = request.form.get('password')
+# @app.route('/login', methods=['GET', 'POST'])
+# def login():
+#     if request.method == 'POST':
+#         try:
+#             username = request.form.get('username')
+#             password = request.form.get('password')
 
-            user = User.query.filter_by(username=username).first()
-            if not user or not check_password_hash(user.password, password):
-                flash('Invalid details')
-                return redirect(url_for('login'))
+#             user = User.query.filter_by(username=username).first()
+#             if not user or not check_password_hash(user.password, password):
+#                 flash('Invalid details')
+#                 return redirect(url_for('login'))
 
-            session['s_id'] = user.student_id
-            session['username'] = user.username
-            flash("Login successful", "success")
+#             session['student_id'] = user.student_id
+#             session['username'] = user.username
+#             flash("Login successful", "success")
+#             return redirect(url_for('index'))
+
+#         except Exception as e:
+#             print(f"An error occurred: {str(e)}")
+#             return redirect(url_for('login'))
+
+@app.route('/approve_post/<int:post_id>', methods=['POST'])
+def approve_post(post_id):
+    if 'username' not in session or not session.get('is_faculty'):
+        flash('Unauthorized action!', 'danger')
+        return redirect(url_for('index'))
+
+    try:
+        post = Post.query.get(post_id)
+        if not post:
+            flash('Post not found!', 'danger')
+            return redirect(url_for('index'))
+        
+        # Check if there's an existing approval record
+        approval = PostApproval.query.filter_by(post_id=post_id).first()
+        
+        if approval:
+            # Update existing approval
+            approval.status = "Approved"
+            approval.remark = None
+            approval.approver_id = session.get('student_id')
+            approval.approval_date = datetime.now()
+        else:
+            # Create new approval record
+            approval = PostApproval(
+                post_id=post_id,
+                status="Approved",
+                remark=None,
+                approver_id=session.get('student_id'),
+                approval_date=datetime.now()
+            )
+            db.session.add(approval)  # ✅ Add the new record to session
+        
+        db.session.commit()  # ✅ Commit changes to the database
+
+        flash('Post approved successfully!', 'success')
+
+    except Exception as e:
+        db.session.rollback()  # ✅ Rollback if an error occurs
+        flash(f'Error: {str(e)}', 'danger')
+
+    finally:
+        db.session.close()  # ✅ Close session to prevent database locks
+
+    return redirect(url_for('index'))
+
+# Route to reject a post
+@app.route('/reject_post/<int:post_id>', methods=['POST'])
+def reject_post(post_id):
+    if 'username' not in session or not session.get('is_faculty'):
+        flash('Unauthorized action!', 'danger')
+        return redirect(url_for('index'))
+
+    try:
+        post = Post.query.get(post_id)
+        if not post:
+            flash('Post not found!', 'danger')
             return redirect(url_for('index'))
 
-        except Exception as e:
-            print(f"An error occurred: {str(e)}")
-            return redirect(url_for('login'))
+        # Get the rejection remark from the form
+        remark = request.form.get('remark', '')
+        
+        # Check if there's an existing approval record
+        approval = PostApproval.query.filter_by(post_id=post_id).first()
+        
+        if approval:
+            # Update existing approval
+            approval.status = "Rejected"
+            approval.remark = remark
+            approval.approver_id = session.get('student_id')
+            approval.approval_date = datetime.now()
+        else:
+            # Create new approval record
+            approval = PostApproval(
+                post_id=post_id,
+                status="Rejected",
+                remark=remark,
+                approver_id=session.get('student_id'),
+                approval_date=datetime.now()
+            )
+            db.session.add(approval)  # ✅ Add the new record to session
+        
+        db.session.commit()  # ✅ Commit changes to the database
 
-@app.route("/faculty/dashboard")
-def faculty_dashboard():
-    return render_template("ASK_Anubhav/Faculty/faculty_dashboard.html")
+        flash('Post rejected successfully!', 'success')
 
+    except Exception as e:
+        db.session.rollback()  # ✅ Rollback if an error occurs
+        flash(f'Error: {str(e)}', 'danger')
 
-# Faculty Post Management
-@app.route('/approve_post/<int:post_id>')
-def approve_post(post_id):
-    post = Post.query.get_or_404(post_id)
+    finally:
+        db.session.close()  # ✅ Close session to prevent database locks
 
-    approval = PostApproval(
-        post_id=post_id,
-        status='approved',
-        approver_id=session['user_id'],
-        approval_date=datetime.utcnow()
-    )
+    return redirect(url_for('index'))
 
-    db.session.add(approval)
-    db.session.commit()
-
-    flash('Post approved successfully', 'success')
-    return redirect(url_for('faculty_posts'))
-
-
-@app.route('/reject_post/<int:post_id>')
-def reject_post(post_id):
-    post = Post.query.get_or_404(post_id)
-
-    approval = PostApproval(
-        post_id=post_id,
-        status='rejected',
-        approver_id=session['user_id'],
-        approval_date=datetime.utcnow()
-    )
-
-    db.session.add(approval)
-    db.session.delete(post)
-    db.session.commit()
-
-    flash('Post rejected and deleted', 'danger')
-    return redirect(url_for('faculty_posts'))
-
-
-# Faculty Posts Page
-@app.route('/faculty/posts')
-def faculty_posts():
-    posts = Post.query.all()
-    return render_template("ASK_Anubhav/Faculty/faculty_posts.html", posts=posts)
+# # Faculty Posts Page
+# @app.route('/faculty/posts')
+# def faculty_posts():
+#     posts = Post.query.all()
+#     return render_template("ASK_Anubhav/Faculty/faculty_posts.html", posts=posts)
 
 # Route for logging out
 @app.route('/logout')
-@login_required
 def logout():
     try:
         session.clear()
@@ -404,53 +570,53 @@ def logout():
 
 
 # Route for student home page where the posts are shown
-@app.route('/index')
-@student_required
-def index():
-    try:
-        if 's_id' not in session:
-            flash("Please login to access the dashboard", "warning")
-            return redirect(url_for('login'))
+# @app.route('/index')
+# @student_required
+# def index():
+#     try:
+#         if 'student_id' not in session:
+#             flash("Please login to access the dashboard", "warning")
+#             return redirect(url_for('login'))
 
-        page = request.args.get('page', 1, type=int)
-        per_page = 5
+#         page = request.args.get('page', 1, type=int)
+#         per_page = 5
 
-        search_query = request.args.get('search', '').strip()
+#         search_query = request.args.get('search', '').strip()
 
-        # Start with the base query
-        query = Post.query.order_by(Post.date_of_post.desc())
+#         # Start with the base query
+#         query = Post.query.order_by(Post.date_of_post.desc())
 
-        # Apply search filter if there's a search query
-        if search_query:
-            search_pattern = f"%{search_query}%"
-            query = query.filter(
-                or_(
-                    func.lower(Post.title).like(func.lower(search_pattern)),
-                    func.lower(Post.body).like(func.lower(search_pattern))
-                )
-            )
+#         # Apply search filter if there's a search query
+#         if search_query:
+#             search_pattern = f"%{search_query}%"
+#             query = query.filter(
+#                 or_(
+#                     func.lower(Post.title).like(func.lower(search_pattern)),
+#                     func.lower(Post.body).like(func.lower(search_pattern))
+#                 )
+#             )
 
-        # Apply pagination after filtering
-        posts = query.paginate(page=page, per_page=per_page, error_out=False)
+#         # Apply pagination after filtering
+#         posts = query.paginate(page=page, per_page=per_page, error_out=False)
 
-        username = session.get('username')
+#         username = session.get('username')
 
-        return render_template('ASK_Anubhav/Student/index.html',
-                               username=username,
-                               posts=posts.items,
-                               pagination=posts)
+#         return render_template('ASK_Anubhav/Student/index.html',
+#                                username=username,
+#                                posts=posts.items,
+#                                pagination=posts)
 
-    except Exception as e:
-        print(f"An error occurred: {str(e)}", "danger")
-        return redirect(url_for('login'))
+#     except Exception as e:
+#         print(f"An error occurred: {str(e)}", "danger")
+#         return redirect(url_for('login'))
 
 
 # Route for creating posts
 @app.route('/create_post', methods=['GET', 'POST'])
-@student_required
+# @student_required
 def create_post():
     try:
-        if 's_id' not in session:
+        if 'student_id' not in session:
             flash("Please log in to create a post", "warning")
             return redirect(url_for('login'))
 
@@ -460,7 +626,7 @@ def create_post():
             title = request.form.get('title')
             body = request.form.get('body')
             keywords = request.form.get('keywords')
-            student_id = session['s_id']
+            student_id = session['student_id']
 
             new_post = Post(title=title, body=body, keywords=keywords, student_id=student_id)
             db.session.add(new_post)
@@ -489,14 +655,66 @@ def create_post():
         flash("An error occurred", "danger")
         print(f"An error occurred: {str(e)}")
         return redirect(url_for('index'))
+    
+@app.route('/ask_question', methods=['GET', 'POST'])
+def ask_question():
+    try:
+        if 'student_id' not in session:
+            flash("Please log in to ask a question", "warning")
+            return redirect(url_for('login'))
+
+        username = session.get('username')
+
+        if request.method == 'POST':
+            title = request.form.get('title')
+            body = request.form.get('body')
+            post_id = request.form.get('post_id')  # Post ID to which the question belongs
+            student_id = session['student_id']
+
+            # Insert the question into the database
+            new_question = Question(
+                title=title,
+                body=body,
+                student_id=student_id,
+                like_count=0,
+                post_id=post_id
+            )
+            db.session.add(new_question)
+            db.session.commit()
+
+            flash("Question asked successfully", "success")
+            return redirect(url_for('index'))
+
+        return render_template('ASK_Anubhav/Student/ask_question.html', username=username)
+
+    except Exception as e:
+        flash("An error occurred", "danger")
+        print(f"An error occurred: {str(e)}")
+        return redirect(url_for('index'))
+    
+@app.route('/my_questions')
+def my_questions():
+    if 'student_id' not in session:  # Ensure student is logged in
+        return redirect(url_for('login'))
+
+    student_id = session['student_id']  # Fetch student_id from session
+    questions = Question.query.filter_by(student_id=student_id).all()
+
+    return render_template('ASK_Anubhav/Student/my_questions.html', questions=questions, total_questions=len(questions))
+
+@app.route('/question/<int:question_id>')
+def question_details(question_id):
+    question = Question.query.get_or_404(question_id)
+    return render_template('question_detail.html', question=question, username=session.get('username'))
+
 
 
 # Route of post page to show individual post
 @app.route('/post/<int:post_id>')
-@student_required
+# @student_required
 def post_details(post_id):
     try:
-        if 's_id' not in session:
+        if 'student_id' not in session:
             flash("Please log in to create a post", "warning")
             return redirect(url_for('login'))
 
@@ -525,11 +743,11 @@ def post_details(post_id):
 @student_required
 def like_post(post_id):
     try:
-        if 's_id' not in session:
+        if 'student_id' not in session:
             flash("Please log in to create a post", "warning")
             return redirect(url_for('login'))
 
-        student_id = session.get('s_id')
+        student_id = session.get('student_id')
         post = Post.query.get_or_404(post_id)
         user_liked = False
 
@@ -565,11 +783,11 @@ def like_post(post_id):
 @student_required
 def my_posts():
     try:
-        if 's_id' not in session:
+        if 'student_id' not in session:
             flash("Please log in to view your posts.", "warning")
             return redirect(url_for('login'))
 
-        student_id = session['s_id']  # Assuming you store user_id in session
+        student_id = session['student_id']  # Assuming you store user_id in session
         my_posts = Post.query.filter_by(student_id=student_id).all()  # Fetch posts
         total_posts = len(my_posts)
 
@@ -586,14 +804,14 @@ def my_posts():
 @student_required
 def add_question():
     try:
-        if 's_id' not in session:
+        if 'student_id' not in session:
             flash("Please log in first", "warning")
             return redirect(url_for('login'))
 
         data = request.form
         title = data.get("title")
         body = data.get("detail")
-        student_id = session['s_id']
+        student_id = session['student_id']
         post_id = data.get("post_id")
 
         if not title or not body or not post_id:
@@ -618,64 +836,244 @@ def add_question():
         print(f"An error occurred: {str(e)}")
         return redirect(url_for('post_details'))
 
+# Import necessary modules
 
-# Route to like questions
-@app.route("/questions/<int:question_id>/like", methods=["POST"])
-@student_required
-def like_question(question_id):
-    try:
-        if 's_id' not in session:
-            flash("Please log in first", "warning")
-            return redirect(url_for('login'))
-
-        question = Question.query.get_or_404(question_id)
-        question.like_count += 1
-        db.session.commit()
-
-        flash(f"Liked!", "success")
-        return redirect(url_for('', question_id=question_id))
-
-    except Exception as e:
-        flash("An error occurred", "danger")
-        print(f"An error occurred while liking the question: {str(e)}")
-        return redirect(url_for('post_details', question_id=question_id))
-
-
-'''
-@app.route("/questions")
-def questions():
-    conn = get_db_connection()
-    questions = conn.execute("SELECT rowid, * FROM question").fetchall()
-    conn.close()
-    return render_template("questions.html", questions=questions)
-
-
-@app.route("/leaderboard")
-def leaderboard():
-    return render_template("leaderboard.html")
-
-@app.route("/api/questions/<int:question_id>/answers", methods=["GET"])
-def get_answers(question_id):
-    conn = get_db_connection()
-    answers = conn.execute("SELECT * FROM answer WHERE question_id = ?", (question_id,)).fetchall()
-    conn.close()
-    return jsonify([dict(ans) for ans in answers])
+@app.route('/qa_forum')
+def qa_forum():
+    # Get all questions
+    questions = db.session.query(Question).all()
     
-@app.route("/api/questions/<int:question_id>/answers", methods=["POST"])
-def add_answer(question_id):
-    data = request.get_json()
-    user_id = data.get("user_id")
-    ans = data.get("ans")
-    if not user_id or not ans:
-        return jsonify({"success": False, "error": "User ID and answer are required"}), 400
-    conn = get_db_connection()
-    conn.execute("INSERT INTO answer (question_id, user_id, ans) VALUES (?, ?, ?)", (question_id, user_id, ans))
-    conn.commit()
-    conn.close()
-    return jsonify({"success": True}), 201
+    # For each question, load its answers
+    for question in questions:
+        # Get all answers for this question
+        answers = db.session.query(Answer).filter(Answer.question_id == question.id).all()
+        question.answers = answers
+    
+    return render_template('ASK_Anubhav/Student/qa_forum.html', questions=questions, username=session.get('username'))
 
-'''
+@app.route('/submit_answer', methods=['POST'])
+def submit_answer():
+    if session.get('is_faculty') != 0:  # Check if user is not a student
+        flash("Only students can submit answers.", "danger")
+        return redirect(url_for('qa_forum'))
+    
+    question_id = request.form.get('question_id')
+    answer_body = request.form.get('answer_body')
+    student_id = session.get('student_id')
+    
+    if not question_id or not answer_body:
+        flash("Answer cannot be empty.", "danger")
+        return redirect(url_for('qa_forum'))
+    
+    # Since we can't modify the model, we'll use raw SQL to insert the answer
+    try:
+        # Insert the answer
+        answer = Answer(body=answer_body, student_id=student_id, question_id=question_id, like_count=0)
+        db.session.add(answer)
+        db.session.flush()  # This will assign an ID to the answer
+        
+        # Create a pending approval status
+        approval = AnswerApproval(answer_id=answer.id, status='pending')
+        db.session.add(approval)
+        
+        db.session.commit()
+        flash("Answer submitted successfully!", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Error submitting answer: {str(e)}", "danger")
+    
+    return redirect(url_for('qa_forum'))
 
+@app.route('/approve_question/<int:question_id>', methods=['POST'])
+def approve_question(question_id):
+    if not session.get('is_faculty'):
+        flash("Unauthorized action!", "danger")
+        return redirect(url_for('qa_forum'))
+    
+    question = Question.query.get_or_404(question_id)
+    
+    # Check if question already has an approval record
+    if not question.approval:
+        # Create a new QuestionApproval record
+        approval = QuestionApproval(question_id=question_id, status='approved')
+        db.session.add(approval)
+    else:
+        # Update existing approval status
+        question.approval.status = 'approved'
+    
+    db.session.commit()
+    flash("Question Approved!", "success")
+    return '', 200
+
+@app.route('/reject_question/<int:question_id>', methods=['POST'])
+def reject_question(question_id):
+    if not session.get('is_faculty'):
+        flash("Unauthorized action!", "danger")
+        return redirect(url_for('qa_forum'))
+    
+    question = Question.query.get_or_404(question_id)
+    
+    # Check if question already has an approval record
+    if not question.approval:
+        # Create a new QuestionApproval record
+        approval = QuestionApproval(question_id=question_id, status='rejected')
+        db.session.add(approval)
+    else:
+        # Update existing approval status
+        question.approval.status = 'rejected'
+    
+    db.session.commit()
+    flash("Question Rejected!", "danger")
+    return '', 200
+
+@app.route('/approve_answer/<int:answer_id>', methods=['POST'])
+def approve_answer(answer_id):
+    if not session.get('is_faculty'):
+        flash("Unauthorized action!", "danger")
+        return redirect(url_for('qa_forum'))
+    
+    answer = Answer.query.get_or_404(answer_id)
+    
+    # Check if answer already has an approval record
+    if not answer.approval:
+        # Create a new AnswerApproval record
+        approval = AnswerApproval(answer_id=answer_id, status='approved')
+        db.session.add(approval)
+    else:
+        # Update existing approval status
+        answer.approval.status = 'approved'
+    
+    db.session.commit()
+    flash("Answer Approved!", "success")
+    return '', 200
+
+@app.route('/reject_answer/<int:answer_id>', methods=['POST'])
+def reject_answer(answer_id):
+    if not session.get('is_faculty'):
+        flash("Unauthorized action!", "danger")
+        return redirect(url_for('qa_forum'))
+    
+    answer = Answer.query.get_or_404(answer_id)
+    
+    # Check if answer already has an approval record
+    if not answer.approval:
+        # Create a new AnswerApproval record
+        approval = AnswerApproval(answer_id=answer_id, status='rejected')
+        db.session.add(approval)
+    else:
+        # Update existing approval status
+        answer.approval.status = 'rejected'
+    
+    db.session.commit()
+    flash("Answer Rejected!", "danger")
+    return '', 200
+
+@app.route('/like_question/<int:question_id>', methods=['POST'])
+def like_question(question_id):
+    question = Question.query.get_or_404(question_id)
+    question.like_count = (question.like_count or 0) + 1
+    db.session.commit()
+    return '', 200
+
+@app.route('/like_answer/<int:answer_id>', methods=['POST'])
+def like_answer(answer_id):
+    answer = Answer.query.get_or_404(answer_id)
+    answer.like_count = (answer.like_count or 0) + 1
+    db.session.commit()
+    return '', 200
+
+
+
+@app.route('/post/<int:post_id>')
+def view_post(post_id):
+    post = Post.query.get_or_404(post_id)
+    return render_template('post_detail.html', post=post, username=session.get('username'))
+
+# Leaderboard route remains unchanged
+@app.route('/leaderboard')
+def leaderboard():
+    filter_type = request.args.get('filter', 'overall')
+    
+    posts_query = """
+        SELECT 
+            'post' as content_type,
+            p.id,
+            p.title,
+            p.like_count,
+            u.username as author,
+            p.date_of_post as date_created
+        FROM 
+            post p
+        JOIN 
+            user u ON p.student_id = u.student_id
+    """
+    
+    questions_query = """
+        SELECT 
+            'question' as content_type,
+            q.id,
+            q.title,
+            q.like_count,
+            u.username as author,
+            p.date_of_post as date_created
+        FROM 
+            question q
+        JOIN 
+            user u ON q.student_id = u.student_id
+        JOIN 
+            post p ON q.post_id = p.id
+    """
+    
+    answers_query = """
+        SELECT 
+            'answer' as content_type,
+            a.id,
+            CASE
+                WHEN LENGTH(a.body) > 30 THEN SUBSTR(a.body, 1, 30) || '...'
+                ELSE a.body
+            END as title,
+            a.like_count,
+            u.username as author,
+            CURRENT_TIMESTAMP as date_created
+        FROM 
+            answer a
+        JOIN 
+            user u ON a.student_id = u.student_id
+    """
+    
+    if filter_type == 'month':
+        first_day = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        posts_query += f" WHERE p.date_of_post >= '{first_day}'"
+        questions_query += f" WHERE p.date_of_post >= '{first_day}'"
+    
+    combined_query = f"""
+        {posts_query}
+        UNION ALL
+        {questions_query}
+        UNION ALL
+        {answers_query}
+        ORDER BY like_count DESC
+        LIMIT 30
+    """
+    
+    results = db.session.execute(text(combined_query))
+    
+    leaderboard_data = []
+    rank = 1
+    
+    for row in results:
+        leaderboard_data.append({
+            'rank': rank,
+            'content_type': row.content_type,
+            'id': row.id,
+            'title': row.title if row.title else 'Untitled',
+            'like_count': row.like_count or 0,
+            'author': row.author,
+            'date_created': row.date_created
+        })
+        rank += 1
+    
+    return render_template('ASK_Anubhav/Student/leaderboard.html', leaderboard=leaderboard_data, filter_type=filter_type, username=session.get('username'))
 
 # Initialize database
 with app.app_context():

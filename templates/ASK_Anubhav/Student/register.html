@@ -23,15 +23,20 @@
           <input type="text" class="form-control" id="username" name="username" required>
       </div>
       <div class="mb-3">
+          <label for="email" class="form-label">Email</label>
+          <input type="email" class="form-control" id="email" name="email" required>
+          <div class="form-text">If your email ends with student.mes.ac.in, you'll be registered as a student. Otherwise, as faculty.</div>
+      </div>
+      <div class="mb-3">
           <label for="password" class="form-label">Password</label>
           <input type="password" class="form-control" id="password" name="password" required>
       </div>
       <div class="mb-3">
-          <button type="submit" class="btn btn-primary">Submit</button>
+          <button type="submit" class="btn btn-primary">Register</button>
       </div>
     </form>
     <div class="container mt-3">
-        <a href="{{ url_for('login') }}">Back to login</a>
+        <a href="{{ url_for('login') }}">Already have an account? Log in</a>
     </div>
     <div class="toast-container position-fixed top-0 start-50 translate-middle-x mt-3">
       {% with messages = get_flashed_messages(with_categories=true) %}
@@ -59,6 +64,6 @@
         });
         toastList.forEach(toast => toast.show());
     });
-</script>
+  </script>
 </body>
 </html>

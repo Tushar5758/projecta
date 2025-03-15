@@ -8,6 +8,4 @@ document.querySelector('#filter-button').addEventListener('click', function() {
       this.classList.toggle('btn-primary');
 });
 
-function goToCreatePage() {
-    window.location.href = '/create_post';
-}
+

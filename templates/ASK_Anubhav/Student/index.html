@@ -1,237 +1,310 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="stylesheet" href="/static/style.css" />
-    <title>Document</title>
-    <link
-      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
-      rel="stylesheet"
-      integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
-      crossorigin="anonymous"
-    />
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
 
-  </head>
-  <body>
-    <nav class="navbar navbar-expand-lg bg-body-tertiary">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="{{ url_for('index') }}">ASK Anubhav</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
-                <span class="navbar-toggler-icon"></span>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="/static/style.css" />
+  <title>Document</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+
+</head>
+
+<body>
+  <nav class="navbar navbar-expand-lg bg-body-tertiary">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="{{ url_for('index') }}">ASK Anubhav</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent"
+        aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarSupportedContent">
+        <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+          <li class="nav-item">
+            <a class="nav-link" aria-current="page" href="{{ url_for('my_posts') }}">My Posts</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('my_questions') }}">My Questions</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link active" href="{{ url_for('qa_forum') }}">Q&A Forum</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link active" href="{{ url_for('leaderboard') }}">View Leaderboard</a>
+          </li>
+        </ul>
+        <form class="d-flex mb-3" method="GET" action="{{ url_for('index') }}">
+          <input class="form-control me-2" type="search" name="search" placeholder="Search" value="{{ search_query }}"
+            aria-label="Search">
+          <button class="btn btn-outline-success" type="submit">Search</button>
+        </form>
+        <!-- Right-aligned username dropdown -->
+        <ul class="navbar-nav">
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown"
+              aria-expanded="false">
+              {{ username }}
+            </a>
+            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
+              <li><a class="dropdown-item" href="#">Profile Settings</a></li>
+              <li>
+                <hr class="dropdown-divider">
+              </li>
+              <li><a class="dropdown-item" href="{{ url_for('logout') }}">Logout</a></li>
+            </ul>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="row mt-5">
+      <div class="col-md-9 ">
+        <h1>All Posts</h1>
+      </div>
+      <div class="col-md-3 text-end">
+        <!-- Ask Question Button -->
+        <button type="button" class="btn btn-outline-primary" onclick="goToQuestion()">
+          Ask a Question
+        </button>
+        
+        <!-- Add a Post Button -->
+        <button type="button" class="btn btn-outline-primary" onclick="goToCreatePage()">
+          Add a Post
+        </button>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-2 col-sm-2 col-md-2 col-xs-2">
+        <p>{{ total_posts }} posts</p>
+      </div>
+      <div class="col-9 col-sm-9 col-md-9 col-xs-9 text-end">
+        <div class="btn-group" role="group" aria-label="Button group with nested dropdown">
+          <button type="button" class="btn btn-outline-primary active">Newest</button>
+          <button type="button" class="btn btn-outline-primary">Most Liked</button>
+
+          <div class="btn-group" role="group">
+            <button type="button" class="btn btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown"
+              aria-expanded="false">
+              More
             </button>
-            <div class="collapse navbar-collapse" id="navbarSupportedContent">
-                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                    <li class="nav-item">
-                        <a class="nav-link" aria-current="page" href="{{ url_for('my_posts') }}">My Posts</a>
-                    </li>
-                </ul>
-                <form class="d-flex mb-3" method="GET" action="{{ url_for('index') }}">
-                    <input class="form-control me-2" type="search" name="search" placeholder="Search" value="{{ search_query }}" aria-label="Search">
-                    <button class="btn btn-outline-success" type="submit">Search</button>
-                </form>
-                <!-- Right-aligned username dropdown -->
-                <ul class="navbar-nav">
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            {{ username }}
-                        </a>
-                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
-                            <li><a class="dropdown-item" href="#">Profile Settings</a></li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item" href="{{ url_for('logout') }}">Logout</a></li>
-                        </ul>
-                    </li>
-                </ul>
-            </div>
+            <ul class="dropdown-menu">
+              <li><a class="dropdown-item" href="#">Frequent</a></li>
+              <li><a class="dropdown-item" href="#">Score</a></li>
+            </ul>
+          </div>
         </div>
-    </nav>
+      </div>
+      <div class="col-1 col-sm-1 col-md-1 col-xs-1 text-end">
+        <button type="button" class="btn btn-outline-primary" id="filter-button" onclick="toggleFilters()">
+          Filters
+        </button>
+      </div>
+    </div>
+    <div class="filters row mt-5 d-none">
+      <div class="col-3 col-sm-3 col-md-3 col-xs-3">
+        <h4>Filter By</h4>
+        <input type="checkbox" />
+        <label> Filter 1</label><br />
+        <input type="checkbox" />
+        <label> Filter 2</label><br />
+        <input type="checkbox" />
+        <label> Filter 3</label><br />
+      </div>
+      <div class="col-3 col-sm-3 col-md-3 col-xs-3">
+        <h4>Sorted By</h4>
+        <input type="radio" />
+        <label> Sort 1</label><br />
+        <input type="radio" />
+        <label> Sort 2</label><br />
+        <input type="radio" />
+        <label> Sort 3</label>
+      </div>
+      <div class="col-3 col-sm-3 col-md-3 col-xs-3">
+        <h4>Tagged With</h4>
+        <input type="radio" />
+        <label> Tag 1</label><br />
+        <input type="radio" />
+        <label> Tag 2</label><br />
+        <input id="tag-input" type="text" class="form-control" placeholder="eg: alegria or youthfest"
+          aria-label="Username" aria-describedby="basic-addon1" />
+      </div>
+    </div>
+    <hr />
+    {% for post in posts %}
+    <div class="row mt-4" id="post-{{ post.id }}">
+      <div class="col-1 text-end">
+        <p style="font-size: 24px;">{{ post.like_count }} <i class="bi bi-heart-fill"></i></p>
+      </div>
+      <div class="col-11">
+        <a class="anchor-tag" href="{{ url_for('post_details', post_id=post.id) }}">
+          <h2>{{ post.title }}</h2>
+        </a>
+        <p>{{ post.body[:350] }}
+          {% if post.body|length > 350 %}
+          <span style="color: #6c757d; font-style: italic;">Read more...</span>
+          {% endif %}
+        </p>
+      </div>
     
-    <div class="container">
-      <div class="row mt-5">
-        <div class="col-md-9 ">
-          <h1>All Posts</h1>
-        </div>
-        <div class="col-md-3 text-end">
-          <button
-            type="button"
-            class="btn btn-outline-primary"
-            onclick="goToCreatePage()"
-          >
-            Add a Post
-          </button>
-        </div>
-      </div>
-      <div class="row">
-        <div class="col-2 col-sm-2 col-md-2 col-xs-2">
-          <p>{{ total_posts }} posts</p>
-        </div>
-        <div class="col-9 col-sm-9 col-md-9 col-xs-9 text-end">
-          <div
-            class="btn-group"
-            role="group"
-            aria-label="Button group with nested dropdown"
-          >
-            <button type="button" class="btn btn-outline-primary active">Newest</button>
-            <button type="button" class="btn btn-outline-primary">Most Liked</button>
-
-            <div class="btn-group" role="group">
-              <button
-                type="button"
-                class="btn btn-outline-primary dropdown-toggle"
-                data-bs-toggle="dropdown"
-                aria-expanded="false"
-              >
-                More
-              </button>
-              <ul class="dropdown-menu">
-                <li><a class="dropdown-item" href="#">Frequent</a></li>
-                <li><a class="dropdown-item" href="#">Score</a></li>
-              </ul>
-            </div>
+      <!-- Faculty Approval Section (Only for Faculty) -->
+      {% if session.get('is_faculty') %}
+      <div class="col-12 text-end mt-2" id="faculty-actions-{{ post.id }}">
+        {% set post_approval = namespace(status='Pending') %}
+        
+        {% for approval in post.post_approval %}
+          {% set post_approval.status = approval.status %}
+          {% set post_approval.remark = approval.remark %}
+        {% endfor %}
+        
+        {% if post_approval.status != "Approved" %}
+          <!-- Approval Status Display -->
+          <span class="badge {% if post_approval.status == 'Rejected' %}bg-danger{% elif post_approval.status == 'Pending' %}bg-warning{% else %}bg-success{% endif %} me-2">
+            Status: {{ post_approval.status }}
+          </span>
+          
+          <!-- If it's rejected, show the remark -->
+          {% if post_approval.status == 'Rejected' and post_approval.remark %}
+          <div class="mt-1 mb-2 text-danger fw-bold">
+            Rejection Reason: {{ post_approval.remark }}
           </div>
-        </div>
-        <div class="col-1 col-sm-1 col-md-1 col-xs-1 text-end">
-          <button
-            type="button"
-            class="btn btn-outline-primary"
-            id = "filter-button"
-            onclick="toggleFilters()"
-          >
-            Filters
-          </button>
-        </div>
-      </div>
-      <div class="filters row mt-5 d-none">
-        <div class="col-3 col-sm-3 col-md-3 col-xs-3">
-          <h4>Filter By</h4>
-          <input type="checkbox" />
-          <label> Filter 1</label><br />
-          <input type="checkbox" />
-          <label> Filter 2</label><br />
-          <input type="checkbox" />
-          <label> Filter 3</label><br />
-        </div>
-        <div class="col-3 col-sm-3 col-md-3 col-xs-3">
-          <h4>Sorted By</h4>
-          <input type="radio" />
-          <label> Sort 1</label><br />
-          <input type="radio" />
-          <label> Sort 2</label><br />
-          <input type="radio" />
-          <label> Sort 3</label>
-        </div>
-        <div class="col-3 col-sm-3 col-md-3 col-xs-3">
-          <h4>Tagged With</h4>
-          <input type="radio" />
-          <label> Tag 1</label><br />
-          <input type="radio" />
-          <label> Tag 2</label><br />
-          <input
-            id="tag-input"
-            type="text"
-            class="form-control"
-            placeholder="eg: alegria or youthfest"
-            aria-label="Username"
-            aria-describedby="basic-addon1"
-          />
-        </div>
-      </div>
-      <hr />
-      {% for post in posts %}
-      <div class="row mt-4">
-        <div class="col-1 col-sm-1 col-md-1 col-xs-1 text-end">
-          <p style="font-size: 24px;">{{ post.like_count }} <i class="bi bi-heart-fill"></i></p>
-        </div>
-        <div class="col-11 col-sm-11 col-md-11 col-xs-11">
-          <a class="anchor-tag" href="{{ url_for('post_details', post_id=post.id) }}">
-            <h2>{{ post.title }}</h2>
-          </a>
-          <p>{{ post.body[:350] }}
-            {% if post.body|length > 350 %} <span style="color: #6c757d; font-style: italic;">Read more...<span> {% endif %}
-          </p>
-        </div>
-        <div class="row">
-          <div class="text-end">
-            <p class="">
-                <small class="text-body-secondary">Posted on {{ post.date_of_post.strftime('%Y-%m-%d %H:%M:%S') }}</small>
-            </p>
-          </div>
-        </div>
-      </div>
-      <hr />
-      {% endfor %}
-
-      {% if posts|length == 0 %}
-      <div class="row mt-4">
-        <div class="col-md-12 col-12 col-sm-12 col-xs-12">
-          <p>No posts available yet.</p>
-        </div>
+          {% endif %}
+          
+          <!-- Approve Button (don't show if already rejected) -->
+          {% if post_approval.status != 'Rejected' %}
+          <form method="POST" action="{{ url_for('approve_post', post_id=post.id) }}" class="d-inline">
+            <button type="submit" class="btn btn-success">Accept</button>
+          </form>
+          {% endif %}
+      
+          <!-- Reject Button (Opens Remark Box) - only show if not already rejected -->
+          {% if post_approval.status != 'Rejected' %}
+          <button class="btn btn-danger" onclick="toggleRejectForm('{{ post.id }}')">Reject</button>
+          
+          <!-- Reject Form (Initially Hidden) -->
+          <form method="POST" action="{{ url_for('reject_post', post_id=post.id) }}" id="reject-form-{{ post.id }}"
+            style="display: none;" class="mt-2">
+            <textarea name="remark" class="form-control" placeholder="Enter rejection remark" required></textarea>
+            <button type="submit" class="btn btn-danger mt-1">Confirm Reject</button>
+          </form>
+          {% endif %}
+        {% else %}
+          <!-- Show approved status if the post is approved -->
+          <span class="badge bg-success">Status: Approved</span>
+        {% endif %}
       </div>
       {% endif %}
     </div>
-
-    <!-- Pagination Controls -->
-<nav>
-    <ul class="pagination justify-content-center">
-        {% if pagination.has_prev %}
-            <li class="page-item">
-                <a class="page-link" href="{{ url_for('index', page=pagination.prev_num) }}">Previous</a>
-            </li>
-        {% endif %}
-
-        {% for num in pagination.iter_pages() %}
-            {% if num %}
-                {% if num == pagination.page %}
-                    <li class="page-item active"><span class="page-link">{{ num }}</span></li>
-                {% else %}
-                    <li class="page-item">
-                        <a class="page-link" href="{{ url_for('index', page=num) }}">{{ num }}</a>
-                    </li>
-                {% endif %}
-            {% else %}
-                <li class="page-item disabled"><span class="page-link">...</span></li>
-            {% endif %}
-        {% endfor %}
-
-        {% if pagination.has_next %}
-            <li class="page-item">
-                <a class="page-link" href="{{ url_for('index', page=pagination.next_num) }}">Next</a>
-            </li>
-        {% endif %}
-    </ul>
-</nav>
-<div class="toast-container position-fixed top-0 start-50 translate-middle-x mt-3">
-  {% with messages = get_flashed_messages(with_categories=true) %}
-      {% for category, message in messages %}
-      <div class="toast" id="like-toast" role="alert" aria-live="assertive" aria-atomic="true">
-        <div class="toast-header">
-            <strong class="me-auto">ASK Anubhav</strong>
-            <small>now</small>
-            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
-        </div>
-        <div class="toast-body">
-            {{ message }}
-        </div>
+    <hr />
+    {% endfor %}
+    
+    {% if posts|length == 0 %}
+    <div class="row mt-4">
+      <div class="col-md-12 col-12 col-sm-12 col-xs-12">
+        <p>No posts available yet.</p>
+      </div>
     </div>
+    {% endif %}
+  </div>
+
+  <!-- Pagination Controls -->
+  <nav>
+    <ul class="pagination justify-content-center">
+      {% if pagination.has_prev %}
+      <li class="page-item">
+        <a class="page-link" href="{{ url_for('index', page=pagination.prev_num, search=search_query) }}">Previous</a>
+      </li>
+      {% endif %}
+
+      {% for num in pagination.iter_pages() %}
+      {% if num %}
+      {% if num == pagination.page %}
+      <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+      {% else %}
+      <li class="page-item">
+        <a class="page-link" href="{{ url_for('index', page=num, search=search_query) }}">{{ num }}</a>
+      </li>
+      {% endif %}
+      {% else %}
+      <li class="page-item disabled"><span class="page-link">...</span></li>
+      {% endif %}
       {% endfor %}
-  {% endwith %}
-</div>
-    <script src="/static/ASK_Anubhav/Student/script.js"></script>
-    <script
-      src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
-      integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
-      crossorigin="anonymous"
-    ></script>
-    <script>
-      document.addEventListener("DOMContentLoaded", function() {
-          var toastElList = [].slice.call(document.querySelectorAll('.toast'));
-          var toastList = toastElList.map(function(toastEl) {
-              return new bootstrap.Toast(toastEl);
-          });
-          toastList.forEach(toast => toast.show());
+
+      {% if pagination.has_next %}
+      <li class="page-item">
+        <a class="page-link" href="{{ url_for('index', page=pagination.next_num, search=search_query) }}">Next</a>
+      </li>
+      {% endif %}
+    </ul>
+  </nav>
+  
+  <div class="toast-container position-fixed top-0 start-50 translate-middle-x mt-3">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+    <div class="toast" id="like-toast" role="alert" aria-live="assertive" aria-atomic="true">
+      <div class="toast-header">
+        <strong class="me-auto">ASK Anubhav</strong>
+        <small>now</small>
+        <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+      </div>
+      <div class="toast-body">
+        {{ message }}
+      </div>
+    </div>
+    {% endfor %}
+    {% endwith %}
+  </div>
+  
+  <script src="/static/ASK_Anubhav/Student/script.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+    integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
+    crossorigin="anonymous"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      var toastElList = [].slice.call(document.querySelectorAll('.toast'));
+      var toastList = toastElList.map(function (toastEl) {
+        return new bootstrap.Toast(toastEl);
       });
+      toastList.forEach(toast => toast.show());
+    });
+    
+    function toggleFilters() {
+      const filters = document.querySelector('.filters');
+      filters.classList.toggle('d-none');
+    }
+    
+    function toggleRejectForm(postId) {
+      var form = document.getElementById("reject-form-" + postId);
+      form.style.display = form.style.display === "none" ? "block" : "none";
+    }
+    
+    function goToCreatePage() {
+      window.location.href = '/create_post';  // Redirects to the create post page
+    }
+
+    function goToQuestion() {
+      window.location.href = '/ask_question';  // Redirects to the ask question page
+    }
   </script>
-  </body>
+  <script>
+    function toggleRejectForm(postId) {
+      let form = document.getElementById("reject-form-" + postId);
+      if (form.style.display === "none") {
+        form.style.display = "block";
+      } else {
+        form.style.display = "none";
+      }
+    }
+  
+    function toggleFilters() {
+      let filters = document.querySelector(".filters");
+      filters.classList.toggle("d-none");
+    }
+  </script>
+  
+</body>
+
 </html>
