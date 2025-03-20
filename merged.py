@@ -245,17 +245,12 @@ def format_datetime(value):
 def student_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if session.get('is_role') != "student":
+        if session.get('is_faculty') != 0:
             flash("Access restricted to students only!", "danger")
             return redirect(url_for('index'))  # Redirect to homepage
         return f(*args, **kwargs)
     return decorated_function
 
-app.route('/')
-def home():
-    if 'username' in session:
-        return redirect(url_for('index'))
-    return redirect(url_for('login'))
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():

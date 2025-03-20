@@ -70,12 +70,12 @@
                     Posted by <strong> {{ posted_by }} </strong> on <strong> {{ post.date_of_post.strftime('%Y-%m-%d %H:%M' )}} </strong>
                 </small>
                 <p class="mt-3">{{ post.body }}</p>
-                <!--<p>Session ID: {{ session.get('s_id') }}</p>
+                <p>Session ID: {{ session.get('student_id') }}</p>
                 <p>Post ID: {{ post.id }}</p>
-                <p>User liked: {{ user_liked }}</p> This was for debugging-->
+                <p>User liked: {{ user_liked }}</p> This was for debugging
             </div>
             <div class="col-md-3 text-end mt-4">
-                {%if session.get('s_id') %}
+                {%if session.get('student_id') %}
                 <form action="{{ url_for('like_post', post_id=post.id) }}" method="POST">
                     {% if user_liked %}
                         <button type="submit" class="btn btn-transparent" style="border: None; font-size: 28px" title="Tap to Unlike">
