@@ -693,18 +693,14 @@ def question_details(question_id):
     return render_template('question_detail.html', question=question, username=session.get('username'))
 
 
-
-# Route of post page to show individual post
 @app.route('/post/<int:post_id>')
-# @student_required
 def post_details(post_id):
     try:
         if 'student_id' not in session:
-            flash("Please log in to create a post", "warning")
+            flash("Please log in to view the post", "warning")
             return redirect(url_for('login'))
 
         post = Post.query.get_or_404(post_id)
-
         author = User.query.get(post.student_id)
         posted_by = author.username if author else None
 
@@ -712,17 +708,159 @@ def post_details(post_id):
         student_id = session.get('student_id')
         user_liked = LikePost.query.filter_by(student_id=student_id, post_id=post_id).first()
 
-        keyword_list = post.keywords.split(",") if post.keywords else []  # Splitting by commas
-        keywords = [keyword.strip() for keyword in keyword_list if keyword.strip()]  # Removing spaces & empty entries
-        post.keywords = keywords
+        keyword_list = post.keywords.split(",") if post.keywords else []
+        keywords = [keyword.strip() for keyword in keyword_list if keyword.strip()]
+        # post.keywords = keywords
+        post.keywords = ", ".join(keywords) 
 
-        return render_template('ASK_Anubhav/Student/post_details.html', post=post, username=username, user_liked=user_liked, posted_by=posted_by)
+        # **Add Questions Related to This Post**
+        questions = Question.query.filter_by(post_id=post_id).all()  # Fetch only matching post_id
 
+        return render_template('ASK_Anubhav/Student/post_details.html', 
+                               post=post, 
+                               username=username, 
+                               user_liked=user_liked, 
+                               posted_by=posted_by, 
+                               questions=questions)  # **Pass questions to template**
+    
     except Exception as e:
         flash(f"An error occurred: {str(e)}", "danger")
         print(f"An error occurred: {str(e)}")
         return redirect(url_for('index'))
 
+@app.route('/add_question_2', methods=['POST'])
+def add_question_2():
+    try:
+        data = request.get_json()
+        title = data.get("title")
+        body = data.get("body")
+        post_id = data.get("post_id")
+
+        if not title or not body:
+            return jsonify({"status": "error", "message": "Title and body are required"}), 400
+
+        # Assuming session["student_id"] holds the logged-in user's ID
+        student_id = session.get("student_id")
+        if not student_id:
+            return jsonify({"status": "error", "message": "User not logged in"}), 401
+
+        # Create and save the question
+        new_question = Question(title=title, body=body, post_id=post_id, student_id=student_id, like_count=0)
+        db.session.add(new_question)
+        db.session.commit()
+
+        # Return success response with question data including the ID
+        return jsonify({
+            "status": "success",
+            "message": "Question added successfully",
+            "question": {
+                "id": new_question.id,  # Include this ID for the data-question-id attribute
+                "title": new_question.title,
+                "body": new_question.body,
+                "like_count": new_question.like_count
+            }
+        }), 200
+
+    except Exception as e:
+        print(f"Error adding question: {str(e)}")  # Logs error in terminal
+        return jsonify({"status": "error", "message": str(e)}), 500
+    
+@app.route('/answer_2', methods=['POST'])
+def add_answer():
+    if 'student_id' not in session:
+        return jsonify({"status": "error", "message": "Login required"}), 403
+
+    data = request.get_json()
+    answer_body = data.get('body')
+    question_id = data.get('question_id')
+
+    if not answer_body or not question_id:
+        return jsonify({"status": "error", "message": "Invalid input"}), 400
+
+    new_answer = Answer(body=answer_body, student_id=session['student_id'], question_id=question_id, like_count=0)
+    db.session.add(new_answer)
+    db.session.commit()
+
+    # This looks good, but could also return the answer details for more flexibility
+    return jsonify({"status": "success", "answer_id": new_answer.id})
+
+@app.route('/like_question_2', methods=['POST'])
+def like_question_2():
+    if 'student_id' not in session:
+        return jsonify({"status": "error", "message": "Login required"}), 403
+
+    data = request.get_json()
+    question_id = data.get('question_id')
+    student_id = session['student_id']
+
+    # Check if user already liked this question
+    existing_like = LikeQuestion.query.filter_by(student_id=student_id, question_id=question_id).first()
+    
+    if existing_like:
+        # If already liked, unlike it (toggle behavior)
+        db.session.delete(existing_like)
+        db.session.commit()
+        action = "unliked"
+    else:
+        # If not liked, add a like
+        new_like = LikeQuestion(student_id=student_id, question_id=question_id)
+        db.session.add(new_like)
+        db.session.commit()
+        action = "liked"
+    
+    # Get updated like count
+    like_count = LikeQuestion.query.filter_by(question_id=question_id).count()
+    
+    # Update the question's like_count
+    question = Question.query.get(question_id)
+    if question:
+        question.like_count = like_count
+        db.session.commit()
+
+    return jsonify({
+        "status": "success", 
+        "action": action,
+        "like_count": like_count
+    })
+
+@app.route('/like_answer_2', methods=['POST'])
+def like_answer_2():
+    if 'student_id' not in session:
+        return jsonify({"status": "error", "message": "Login required"}), 403
+
+    data = request.get_json()
+    answer_id = data.get('answer_id')
+    student_id = session['student_id']
+
+    # Check if user already liked this answer
+    existing_like = LikeAnswer.query.filter_by(student_id=student_id, answer_id=answer_id).first()
+
+    if existing_like:
+        # If already liked, unlike it (toggle behavior)
+        db.session.delete(existing_like)
+        db.session.commit()
+        action = "unliked"
+    else:
+        # If not liked, add a like
+        new_like = LikeAnswer(student_id=student_id, answer_id=answer_id)
+        db.session.add(new_like)
+        db.session.commit()
+        action = "liked"
+
+    # Get updated like count
+    like_count = LikeAnswer.query.filter_by(answer_id=answer_id).count()
+    
+    # Update the answer's like_count
+    answer = Answer.query.get(answer_id)
+    if answer:
+        answer.like_count = like_count
+        db.session.commit()
+
+    return jsonify({
+        "status": "success", 
+        "action": action,
+        "like_count": like_count
+    })
 
 # Route to like a post
 @app.route('/like/<int:post_id>', methods=['POST'])
