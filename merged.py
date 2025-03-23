@@ -1,3 +1,5 @@
+# DON'T CHANGE THE VARIABLES THAT IVE ALREADY CREATED, IF YOU ARE PLEASE CHECK WITH THE OTHER PAGES TOO !!!
+
 import os
 from functools import wraps
 
@@ -312,51 +314,49 @@ def login():
 @app.route('/index')
 @app.route('/')
 def index():
-    page = request.args.get('page', 1, type=int)
-    search_query = request.args.get('search', '')
+    try:
+        if 'student_id' not in session:
+            flash("Please login to access the dashboard", "warning")
+            return redirect(url_for('login'))
+
+        page = request.args.get('page', 1, type=int)
+        per_page = 5
+        search_query = request.args.get('search', '').strip()
+        posts_query = Post.query.outerjoin(PostApproval, Post.id == PostApproval.post_id)
+
+        if search_query:
+            search_pattern = f"%{search_query}%"
+            query = posts_query.filter(
+                or_(func.lower(Post.title).like(func.lower(search_pattern)),
+                    func.lower(Post.body).like(func.lower(search_pattern)),
+                    func.lower(Post.keywords).like(func.lower(search_pattern))
+                    )
+                )
+
+        if not session.get('is_faculty'):
+            posts_query = posts_query.filter(or_(PostApproval.status == "Approved"))
+
+        # Order by newest first
+        posts_query = posts_query.order_by(Post.date_of_post.desc())
+
+        pagination = posts_query.paginate(page=page, per_page=per_page, error_out=False)
+        posts = pagination.items
     
-    # Join Post with PostApproval to filter by status
-    if search_query:
-        # With search query
-        posts_query = Post.query.outerjoin(
-            PostApproval, 
-            Post.id == PostApproval.post_id
-        ).filter(
-            or_(
-                Post.title.contains(search_query),
-                Post.body.contains(search_query),
-                Post.keywords.contains(search_query)
-            )
+        return render_template(
+            'ASK_Anubhav/Student/index.html',
+            posts=posts,
+            pagination=pagination,
+            total_posts=posts_query.count(),
+            search_query=search_query,
+            username=session.get('username', 'Guest')
         )
-    else:
-      
-        posts_query = Post.query.outerjoin(
-            PostApproval, 
-            Post.id == PostApproval.post_id
-        )
-    
-    if not session.get('is_faculty'):
-        posts_query = posts_query.filter(
-            or_(
-                PostApproval.status == "Approved",
-                Post.student_id == session.get('student_id', 0)
-            )
-        )
-        
-    # Order by newest first
-    posts_query = posts_query.order_by(Post.date_of_post.desc())
-   
-    pagination = posts_query.paginate(page=page, per_page=10)
-    posts = pagination.items
-    
-    return render_template(
-        'ASK_Anubhav/Student/index.html', 
-        posts=posts, 
-        pagination=pagination,
-        total_posts=posts_query.count(),
-        search_query=search_query,
-        username=session.get('username', 'Guest')
-    )
+
+    except Exception as e:
+        print(f"An error occurred: {str(e)}")
+        flash("Something went wrong!", "danger")
+        return redirect(url_for('login'))
+
+
 # @app.route('/logout')
 # def logout():
 #     session.pop('username', None)
@@ -542,13 +542,6 @@ def reject_post(post_id):
         db.session.close() 
     return redirect(url_for('index'))
 
-# # Faculty Posts Page
-# @app.route('/faculty/posts')
-# def faculty_posts():
-#     posts = Post.query.all()
-#     return render_template("ASK_Anubhav/Faculty/faculty_posts.html", posts=posts)
-
-# Route for logging out
 @app.route('/logout')
 def logout():
     try:
@@ -716,7 +709,8 @@ def post_details(post_id):
         posted_by = author.username if author else None
 
         username = session.get('username')
-        user_liked = session.get('user_liked', False)
+        student_id = session.get('student_id')
+        user_liked = LikePost.query.filter_by(student_id=student_id, post_id=post_id).first()
 
         keyword_list = post.keywords.split(",") if post.keywords else []  # Splitting by commas
         keywords = [keyword.strip() for keyword in keyword_list if keyword.strip()]  # Removing spaces & empty entries
@@ -779,16 +773,37 @@ def my_posts():
             flash("Please log in to view your posts.", "warning")
             return redirect(url_for('login'))
 
-        student_id = session['student_id']  # Assuming you store user_id in session
-        my_posts = Post.query.filter_by(student_id=student_id).all()  # Fetch posts
-        total_posts = len(my_posts)
+        page = request.args.get('page', 1, type=int)
 
-        return render_template('ASK_Anubhav/Student/my_posts.html', posts=my_posts, total_posts=total_posts, username=session['username'])
+        student_id = session.get('student_id')
+        total_posts = Post.query.filter_by(student_id=student_id).count()
+
+        username = session.get('username')
+
+        # ✅ Get all posts by this student, including approval status
+        posts_query = db.session.query(
+            Post, PostApproval.status
+        ).outerjoin(PostApproval, Post.id == PostApproval.post_id).filter(
+            Post.student_id == student_id
+        ).order_by(Post.date_of_post.desc())
+
+        # ✅ Paginate results
+        pagination = posts_query.paginate(page=page, per_page=5, error_out=False)
+        posts = pagination.items
+
+        return render_template(
+            'ASK_Anubhav/Student/my_posts.html',
+            posts=posts,
+            pagination=pagination,
+            student_id=student_id,
+            username=username,
+            total_posts=total_posts
+        )
 
     except Exception as e:
         flash(f"An error occurred while fetching your posts: {str(e)}", "danger")
         print("An error occurred while fetching your posts")
-        return redirect(url_for('index'))  # Redirect to index or another appropriate page
+        return redirect(url_for('index'))
 
 
 # Route to add questions

@@ -31,10 +31,10 @@
             <a class="nav-link" href="{{ url_for('my_questions') }}">My Questions</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link active" href="{{ url_for('qa_forum') }}">Q&A Forum</a>
+            <a class="nav-link" href="{{ url_for('qa_forum') }}">Q&A Forum</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link active" href="{{ url_for('leaderboard') }}">View Leaderboard</a>
+            <a class="nav-link" href="{{ url_for('leaderboard') }}">View Leaderboard</a>
           </li>
         </ul>
         <form class="d-flex mb-3" method="GET" action="{{ url_for('index') }}">
@@ -73,21 +73,28 @@
         </div>
       <div>
         <hr />
-        {% for post in posts %}
-        <div class="row mt-4">
+        {% for post, approval_status in posts %}
+        <div class="row mt-4" onclick="window.location='{{ url_for('post_details', post_id=post.id) }}';"
+         style="cursor: pointer;"> <!-- this line allows the entire div to be clickable -->
           <div class="col-1 col-sm-1 col-md-1 col-xs-1 text-end">
             <p style="font-size: 24px;">{{ post.like_count }} <i class="bi bi-heart-fill"></i></p>
           </div>
           <div class="col-10 col-sm-10 col-md-10 col-xs-10">
-            <a class="anchor-tag" href="{{ url_for('post_details', post_id=post.id) }}">
+            <a class="anchor-tag" href="{{ url_for('post_details', post_id=post.id) }}" style="text-decoration:none;">
               <h2>{{ post.title }}</h2>
             </a>
             <p>{{ post.body[:350] }}
             {% if post.body|length > 350 %} <span style="color: #6c757d; font-style: italic;">Read more...<span> {% endif %}
             </p>
           </div>
-          <div class="text-end col-1 col-sm-1 col-md-1 col-xs-1">
-              <a class="anchor-tag" href="#"><i class="bi bi-pen"></i></a>
+          <div class="mt-2 text-end">
+                    {% if approval_status == "Approved" %}
+                        <span class="badge bg-success rounded-pill fs-5" title="Approved"><i class="bi bi-check-circle"></i></span>
+                    {% elif approval_status == "Rejected" %}
+                        <span class="badge bg-danger rounded-pill fs-5" title="Rejected"><i class="bi bi-x-circle"></i></span>
+                    {% else %}
+                        <span class="badge bg-warning rounded-pill fs-5" title="Pending"><i class="bi bi-hourglass-split"></i></span>
+                    {% endif %}
           </div>
         </div>
           <div class="row">
@@ -97,6 +104,7 @@
               </p>
             </div>
           </div>
+      </a>
       <hr />
       {% endfor %}
 
@@ -108,6 +116,36 @@
       </div>
       {% endif %}
     </div>
+
+    <nav>
+    <ul class="pagination justify-content-center">
+      {% if pagination.has_prev %}
+      <li class="page-item">
+        <a class="page-link" href="{{ url_for('index', page=pagination.prev_num, search=search_query) }}">Previous</a>
+      </li>
+      {% endif %}
+
+      {% for num in pagination.iter_pages() %}
+      {% if num %}
+      {% if num == pagination.page %}
+      <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+      {% else %}
+      <li class="page-item">
+        <a class="page-link" href="{{ url_for('index', page=num, search=search_query) }}">{{ num }}</a>
+      </li>
+      {% endif %}
+      {% else %}
+      <li class="page-item disabled"><span class="page-link">...</span></li>
+      {% endif %}
+      {% endfor %}
+
+      {% if pagination.has_next %}
+      <li class="page-item">
+        <a class="page-link" href="{{ url_for('index', page=pagination.next_num, search=search_query) }}">Next</a>
+      </li>
+      {% endif %}
+    </ul>
+  </nav>
     <div class="toast-container position-fixed top-0 start-50 translate-middle-x mt-3">
       {% with messages = get_flashed_messages(with_categories=true) %}
           {% for category, message in messages %}
