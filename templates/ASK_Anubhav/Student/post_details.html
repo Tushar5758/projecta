@@ -62,7 +62,43 @@
 
   <div class="container">
     <div class="row">
-      <div class="col-md-9 mt-4">
+      <div class="mt-3">
+        {% if session.get('is_faculty') %}
+            {% if post.approval and post.approval.status.lower() in ["approved", "rejected"] %}
+                {% if post.approval.status.lower() == "rejected" %}
+                    <div class="alert alert-danger" role="alert">
+                        ✗ Rejected - {{ post.approval.remark }}
+                    </div>
+                {% else %}
+                    <div class="alert alert-success" role="alert">
+                        ✓ Approved
+                    </div>
+                {% endif %}
+            {% endif %}
+        {% endif %}
+        {% if post.student_id == student_id %}
+            {% if post.approval and post.approval.status.lower() in ["approved", "rejected"] %}
+                {% if post.approval.status.lower() == "rejected" %}
+                    <div class="alert alert-danger" role="alert">
+                        ✗ Rejected - {{ post.approval.remark }}
+                    </div>
+                {% elif post.approval.status.lower() == "approved" %}
+                    <div class="alert alert-success" role="alert">
+                        ✓ Approved
+                    </div>
+                {% else %}
+                    <div class="alert alert-warning" role="alert">
+                        ⴵ Pending
+                    </div>
+                {% endif %}
+            {% else %}
+                    <div class="alert alert-warning" role="alert">
+                        ⴵ Pending
+                    </div>
+            {% endif %}
+        {% endif %}
+      </div>
+      <div class="col-md-9">
         <h3>{{ post.title }}</h3>
         <small>
           Posted by <strong> {{ posted_by }} </strong> on <strong> {{ post.date_of_post.strftime('%Y-%m-%d %H:%M' )}}
@@ -71,7 +107,39 @@
         <p class="mt-3">{{ post.body }}</p>
       </div>
       <div class="col-md-3 text-end mt-4">
-        {%if session.get('student_id') %}
+        {% if session.get('is_faculty') %}
+        {% if not post.approval or post.approval.status.lower() not in ["approved", "rejected"] %}
+        <form method="POST" action="{{ url_for('approve_post', post_id=post.id) }}" class="d-inline">
+            <button type="submit" class="btn btn-success">Accept</button>
+        </form>
+        <!-- Button trigger modal -->
+        <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#exampleModal">Reject</button>
+
+        <!-- Modal -->
+        <div class="modal fade" id="exampleModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+          <div class="modal-dialog">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h1 class="modal-title fs-5" id="exampleModalLabel">Rejection Remark</h1>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+              </div>
+              <div class="modal-body text-start">
+                <form id="rejectForm" method="POST" action="{{ url_for('reject_post', post_id=post.id) }}" id="reject-form-{{ post.id }}"
+                    class="mt-2">
+                    <label for="remarkInput" class="form-label">Enter Rejection Remark:</label>
+                    <textarea class="form-control" id="remarkInput" name="remark" required></textarea>
+                    <input type="hidden" id="postIdInput" name="post_id">  <!-- Hidden input for post ID -->
+                </form>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="submit" class="btn btn-primary" form="rejectForm" >Save changes</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        {% endif %}
+        {%elif session.get('is_faculty') == 0 %}
         <form action="{{ url_for('like_post', post_id=post.id) }}" method="POST">
           {% if user_liked %}
           <button type="submit" class="btn btn-transparent" style="border: None; font-size: 28px" title="Tap to Unlike">
@@ -89,10 +157,10 @@
       </div>
     </div>
     <div>
-      {% if post.keywords%}
-      {% for keyword in post.keywords %}
-      <p class="badge text-bg-secondary mb-5">{{ keyword }}</p>
-      {% endfor %}
+      {% if keywords %}
+        {% for keyword in keywords %}
+          <p class="badge text-bg-secondary mb-5">{{ keyword }}</p>
+        {% endfor %}
       {% endif %}
     </div>
   </div>
@@ -135,7 +203,6 @@
 
     <!-- Loop through each question -->
     <div class="question-section" id="questionSection"  data-post-id="{{ post.id }}">
-      >
       {% for question in post.questions %}
       <div class="question-box border p-3 mb-3">
         <h5>{{ question.title }}</h5>
@@ -411,6 +478,12 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 });
     </script>
+    <script>
+    function toggleRejectForm(postId) {
+
+    }
+  </script>
+
 
 </body>
 

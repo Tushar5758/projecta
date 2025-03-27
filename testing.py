@@ -1,6 +1,5 @@
-from merged import LikePost, app
+from merged import LikePost, app, Post
 
 with app.app_context():  # ✅ Create an application context
-    likes = LikePost.query.all()
-    print("Likes in Database:", likes)  # ✅ Print the likes to see if they exist
-
+    for post in Post.query.all():
+        print(f"Post ID: {post.id}, Type: {type(post.keywords)}, Value: {post.keywords}")

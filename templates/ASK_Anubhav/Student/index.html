@@ -154,47 +154,17 @@
       <!-- Faculty Approval Section (Only for Faculty) -->
       {% if session.get('is_faculty') %}
       <div class="col-12 text-end mt-2" id="faculty-actions-{{ post.id }}">
-        {% set post_approval = namespace(status='Pending') %}
-        
-        {% for approval in post.post_approval %}
-          {% set post_approval.status = approval.status %}
-          {% set post_approval.remark = approval.remark %}
-        {% endfor %}
-        
-        {% if post_approval.status != "Approved" %}
-          <!-- Approval Status Display -->
-          <span class="badge {% if post_approval.status == 'Rejected' %}bg-danger{% elif post_approval.status == 'Pending' %}bg-warning{% else %}bg-success{% endif %} me-2">
-            Status: {{ post_approval.status }}
-          </span>
-          
-          <!-- If it's rejected, show the remark -->
-          {% if post_approval.status == 'Rejected' and post_approval.remark %}
-          <div class="mt-1 mb-2 text-danger fw-bold">
-            Rejection Reason: {{ post_approval.remark }}
-          </div>
-          {% endif %}
-          
-          <!-- Approve Button (don't show if already rejected) -->
-          {% if post_approval.status != 'Rejected' %}
-          <form method="POST" action="{{ url_for('approve_post', post_id=post.id) }}" class="d-inline">
-            <button type="submit" class="btn btn-success">Accept</button>
-          </form>
-          {% endif %}
-      
-          <!-- Reject Button (Opens Remark Box) - only show if not already rejected -->
-          {% if post_approval.status != 'Rejected' %}
-          <button class="btn btn-danger" onclick="toggleRejectForm('{{ post.id }}')">Reject</button>
-          
-          <!-- Reject Form (Initially Hidden) -->
-          <form method="POST" action="{{ url_for('reject_post', post_id=post.id) }}" id="reject-form-{{ post.id }}"
-            style="display: none;" class="mt-2">
-            <textarea name="remark" class="form-control" placeholder="Enter rejection remark" required></textarea>
-            <button type="submit" class="btn btn-danger mt-1">Confirm Reject</button>
-          </form>
-          {% endif %}
+        {% set status = post.approval.status.lower() if post.approval else "pending" %}
+
+        {% if "approved" in status %}
+          <span class="badge bg-success rounded-pill fs-5" title="Approved"><i class="bi bi-check-circle"></i></span>
+        {% elif "rejected" in status %}
+          <span class="badge bg-danger rounded-pill fs-5" title="Rejected"><i class="bi bi-x-circle"></i></span>
+        <!--<div class="mt-1 mb-2 text-danger fw-bold">
+            Rejection Reason: {{ post.approval.remark }}
+        </div> -->
         {% else %}
-          <!-- Show approved status if the post is approved -->
-          <span class="badge bg-success">Status: Approved</span>
+          <span class="badge bg-warning rounded-pill fs-5" title="Pending"><i class="bi bi-hourglass-split"></i></span>
         {% endif %}
       </div>
       {% endif %}

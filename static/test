@@ -1,1 +1,11 @@
-123
+<div class="col-15 text-end my-2" id="faculty-actions-{{ post.id }}">
+        {% set status = post.approval.status.lower() if post.approval else "pending" %}
+        {% if "approved" in status %}
+          <span class="badge bg-success">Status: Approved</span>
+        {% elif "rejected" in status %}
+          <span class="badge bg-danger">Status: Rejected</span>
+        {% else %}
+          <span class="badge bg-warning">Status: Pending</span>
+        {% endif %}
+
+      </div>

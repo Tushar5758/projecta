@@ -708,20 +708,16 @@ def post_details(post_id):
         student_id = session.get('student_id')
         user_liked = LikePost.query.filter_by(student_id=student_id, post_id=post_id).first()
 
-        keyword_list = post.keywords.split(",") if post.keywords else []
-        keywords = [keyword.strip() for keyword in keyword_list if keyword.strip()]
+        print("Final post.keywords:", type(post.keywords), post.keywords)
+
+        keyword_list = post.keywords.split(",") if post.keywords else []  # Splitting by commas
+        keywords = [keyword.strip() for keyword in keyword_list if keyword.strip()]  # Removing spaces & empty entries
         # post.keywords = keywords
-        post.keywords = ", ".join(keywords) 
 
         # **Add Questions Related to This Post**
         questions = Question.query.filter_by(post_id=post_id).all()  # Fetch only matching post_id
 
-        return render_template('ASK_Anubhav/Student/post_details.html', 
-                               post=post, 
-                               username=username, 
-                               user_liked=user_liked, 
-                               posted_by=posted_by, 
-                               questions=questions)  # **Pass questions to template**
+        return render_template('ASK_Anubhav/Student/post_details.html', post=post, username=username, user_liked=user_liked, posted_by=posted_by, questions=questions, keywords=keyword_list, student_id=student_id)  # **Pass questions to template**
     
     except Exception as e:
         flash(f"An error occurred: {str(e)}", "danger")
