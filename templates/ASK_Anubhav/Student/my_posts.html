@@ -68,8 +68,16 @@
         </div>
       </div>
       <div class="row">
-        <div class="col-2 col-sm-2 col-md-2 col-xs-2">
+        <div class="col-3 col-sm-3 col-md-3 col-xs-3">
           <p>{{ total_posts }} posts</p>
+        </div>
+        <div class="col-9 col-sm-9 col-md-9 col-xs-9 text-end">
+            <div class="btn-group" role="group" aria-label="Button group with nested dropdown">
+                <a href="{{ url_for('my_posts', sort='latest', page=1, search=search_query) }}" class="btn btn-outline-primary {% if current_sort == 'latest' %}active{% endif %}">All</a>
+                <a href="{{ url_for('my_posts', sort='accepted', page=1, search=search_query) }}" class="btn btn-outline-primary {% if current_sort == 'accepted' %}active{% endif %}">Accepted</a>
+                <a href="{{ url_for('my_posts', sort='rejected', page=1, search=search_query) }}" class="btn btn-outline-primary {% if current_sort == 'rejected' %}active{% endif %}">Rejected</a>
+                <a href="{{ url_for('my_posts', sort='pending', page=1, search=search_query) }}" class="btn btn-outline-primary {% if current_sort == 'pending' %}active{% endif %}">Pending</a>
+            </div>
         </div>
       <div>
         <hr />
@@ -121,11 +129,11 @@
       {% endif %}
     </div>
 
-    <nav>
+  <nav>
     <ul class="pagination justify-content-center">
       {% if pagination.has_prev %}
       <li class="page-item">
-        <a class="page-link" href="{{ url_for('my_posts', page=pagination.prev_num, search=search_query) }}">Previous</a>
+        <a class="page-link" href="{{ url_for('my_posts', page=pagination.prev_num, search=search_query, sort=current_sort) }}">Previous</a>
       </li>
       {% endif %}
 
@@ -135,7 +143,7 @@
       <li class="page-item active"><span class="page-link">{{ num }}</span></li>
       {% else %}
       <li class="page-item">
-        <a class="page-link" href="{{ url_for('my_posts', page=num, search=search_query) }}">{{ num }}</a>
+        <a class="page-link" href="{{ url_for('my_posts', page=num, search=search_query, sort=current_sort) }}">{{ num }}</a>
       </li>
       {% endif %}
       {% else %}
@@ -145,7 +153,7 @@
 
       {% if pagination.has_next %}
       <li class="page-item">
-        <a class="page-link" href="{{ url_for('my_posts', page=pagination.next_num, search=search_query) }}">Next</a>
+        <a class="page-link" href="{{ url_for('my_posts', page=pagination.next_num, search=search_query, sort=current_sort) }}">Next</a>
       </li>
       {% endif %}
     </ul>

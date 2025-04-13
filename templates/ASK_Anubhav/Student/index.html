@@ -66,6 +66,7 @@
         <h1>All Posts</h1>
       </div>
       <div class="col-md-3 text-end">
+        {% if not session.get('is_faculty') %}
         <!-- Ask Question Button -->
         <button type="button" class="btn btn-outline-primary" onclick="goToQuestion()">
           Ask a Question
@@ -75,6 +76,7 @@
         <button type="button" class="btn btn-outline-primary" onclick="goToCreatePage()">
           Add a Post
         </button>
+        {% endif %}
       </div>
     </div>
     <div class="row">
@@ -82,21 +84,19 @@
         <p>{{ total_posts }} posts</p>
       </div>
       <div class="col-9 col-sm-9 col-md-9 col-xs-9 text-end">
+        {% if session.get('is_faculty') %}
         <div class="btn-group" role="group" aria-label="Button group with nested dropdown">
-          <button type="button" class="btn btn-outline-primary active">Newest</button>
-          <button type="button" class="btn btn-outline-primary">Most Liked</button>
-
-          <div class="btn-group" role="group">
-            <button type="button" class="btn btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown"
-              aria-expanded="false">
-              More
-            </button>
-            <ul class="dropdown-menu">
-              <li><a class="dropdown-item" href="#">Frequent</a></li>
-              <li><a class="dropdown-item" href="#">Score</a></li>
-            </ul>
-          </div>
+                <a href="{{ url_for('index', sort='latest', page=1, search=search_query) }}" class="btn btn-outline-primary {% if current_sort == 'latest' %}active{% endif %}">All</a>
+                <a href="{{ url_for('index', sort='accepted', page=1, search=search_query) }}" class="btn btn-outline-primary {% if current_sort == 'accepted' %}active{% endif %}">Accepted</a>
+                <a href="{{ url_for('index', sort='rejected', page=1, search=search_query) }}" class="btn btn-outline-primary {% if current_sort == 'rejected' %}active{% endif %}">Rejected</a>
+                <a href="{{ url_for('index', sort='pending', page=1, search=search_query) }}" class="btn btn-outline-primary {% if current_sort == 'pending' %}active{% endif %}">Pending</a>
+            </div>
+        {% else %}
+        <div class="btn-group" role="group" aria-label="Button group with nested dropdown">
+          <a href="{{ url_for('index', sort='latest', search=search_query) }}" class="btn btn-outline-primary {% if current_sort == 'latest' %}active{% endif %}">Newest</a>
+          <a href="{{ url_for('index', sort='likes') }}" class="btn btn-outline-primary {% if current_sort == 'likes' %}active{% endif %}">Most Liked</a>
         </div>
+        {% endif %}
       </div>
       <div class="col-1 col-sm-1 col-md-1 col-xs-1 text-end">
         <button type="button" class="btn btn-outline-primary" id="filter-button" onclick="toggleFilters()">
@@ -186,7 +186,7 @@
     <ul class="pagination justify-content-center">
       {% if pagination.has_prev %}
       <li class="page-item">
-        <a class="page-link" href="{{ url_for('index', page=pagination.prev_num, search=search_query) }}">Previous</a>
+        <a class="page-link" href="{{ url_for('index', page=pagination.prev_num, search=search_query, sort=current_sort) }}">Previous</a>
       </li>
       {% endif %}
 
@@ -196,7 +196,7 @@
       <li class="page-item active"><span class="page-link">{{ num }}</span></li>
       {% else %}
       <li class="page-item">
-        <a class="page-link" href="{{ url_for('index', page=num, search=search_query) }}">{{ num }}</a>
+        <a class="page-link" href="{{ url_for('index', page=num, search=search_query, sort=current_sort) }}">{{ num }}</a>
       </li>
       {% endif %}
       {% else %}
@@ -206,7 +206,7 @@
 
       {% if pagination.has_next %}
       <li class="page-item">
-        <a class="page-link" href="{{ url_for('index', page=pagination.next_num, search=search_query) }}">Next</a>
+        <a class="page-link" href="{{ url_for('index', page=pagination.next_num, search=search_query, sort=current_sort) }}">Next</a>
       </li>
       {% endif %}
     </ul>

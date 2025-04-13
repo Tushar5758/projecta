@@ -319,6 +319,8 @@ def index():
             flash("Please login to access the dashboard", "warning")
             return redirect(url_for('login'))
 
+        sort = request.args.get('sort', 'latest')  # default sort is 'latest'
+
         page = request.args.get('page', 1, type=int)
         per_page = 5
         search_query = request.args.get('search', '').strip()
@@ -336,8 +338,20 @@ def index():
         if not session.get('is_faculty'):
             posts_query = posts_query.filter(or_(PostApproval.status == "Approved"))
 
-        # Order by newest first
-        posts_query = posts_query.order_by(Post.date_of_post.desc())
+        if sort == 'accepted':
+            posts_query = posts_query.filter(func.lower(PostApproval.status) == 'approved').order_by(
+                Post.date_of_post.desc())
+        elif sort == 'rejected':
+            posts_query = posts_query.filter(func.lower(PostApproval.status) == 'rejected').order_by(
+                Post.date_of_post.desc())
+        elif sort == 'pending':
+            posts_query = posts_query.filter(PostApproval.post_id == None).order_by(Post.date_of_post.desc())
+        elif sort == 'likes':
+            posts_query = posts_query.order_by(Post.like_count.desc())
+        else:
+            posts_query = posts_query.order_by(Post.date_of_post.desc())
+
+        filtered_post_count = posts_query.count()
 
         pagination = posts_query.paginate(page=page, per_page=per_page, error_out=False)
         posts = pagination.items
@@ -346,9 +360,10 @@ def index():
             'ASK_Anubhav/Student/index.html',
             posts=posts,
             pagination=pagination,
-            total_posts=posts_query.count(),
+            total_posts=filtered_post_count,
             search_query=search_query,
-            username=session.get('username', 'Guest')
+            username=session.get('username', 'Guest'),
+            current_sort=sort
         )
 
     except Exception as e:
@@ -909,6 +924,8 @@ def my_posts():
 
         page = request.args.get('page', 1, type=int)
 
+        sort = request.args.get('sort', 'latest')  # Default sort is latest
+
         student_id = session.get('student_id')
         total_posts = Post.query.filter_by(student_id=student_id).count()
 
@@ -921,6 +938,19 @@ def my_posts():
             Post.student_id == student_id
         ).order_by(Post.date_of_post.desc())
 
+        if sort == 'accepted':
+            posts_query = posts_query.filter(func.lower(PostApproval.status) == 'approved').order_by(Post.date_of_post.desc())
+        elif sort == 'rejected':
+            posts_query = posts_query.filter(func.lower(PostApproval.status) == 'rejected').order_by(Post.date_of_post.desc())
+        elif sort == 'pending':
+            posts_query = posts_query.filter(PostApproval.post_id == None).order_by(Post.date_of_post.desc())
+        elif sort == 'likes':
+            posts_query = posts_query.order_by(Post.like_count.desc())
+        else:
+            posts_query = posts_query.order_by(Post.date_of_post.desc())
+
+        filtered_post_count = posts_query.count()
+
         # ✅ Paginate results
         pagination = posts_query.paginate(page=page, per_page=5, error_out=False)
         posts = pagination.items
@@ -931,7 +961,8 @@ def my_posts():
             pagination=pagination,
             student_id=student_id,
             username=username,
-            total_posts=total_posts
+            total_posts=filtered_post_count,
+            current_sort=sort
         )
 
     except Exception as e:
