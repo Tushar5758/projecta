@@ -700,12 +700,24 @@ def my_questions():
     student_id = session['student_id']  # Fetch student_id from session
     questions = Question.query.filter_by(student_id=student_id).all()
 
-    return render_template('ASK_Anubhav/Student/my_questions.html', questions=questions, total_questions=len(questions))
+    # Add a flag to each question to check if it's liked by the current student
+    for question in questions:
+        question.liked_by_current_user = LikeQuestion.query.filter_by(
+            student_id=student_id, question_id=question.id
+        ).first() is not None
+
+    return render_template(
+        'ASK_Anubhav/Student/my_questions.html',
+        questions=questions,
+        total_questions=len(questions),
+        username=session.get('username')
+    )
+
 
 @app.route('/question/<int:question_id>')
 def question_details(question_id):
     question = Question.query.get_or_404(question_id)
-    return render_template('question_detail.html', question=question, username=session.get('username'))
+    return render_template('ASK_Anubhav/Student/question_detail.html', question=question, username=session.get('username'))
 
 
 @app.route('/post/<int:post_id>')
@@ -795,44 +807,44 @@ def add_answer():
     # This looks good, but could also return the answer details for more flexibility
     return jsonify({"status": "success", "answer_id": new_answer.id})
 
-@app.route('/like_question_2', methods=['POST'])
-def like_question_2():
-    if 'student_id' not in session:
-        return jsonify({"status": "error", "message": "Login required"}), 403
+# @app.route('/like_question_2', methods=['POST'])
+# def like_question_2():
+#     if 'student_id' not in session:
+#         return jsonify({"status": "error", "message": "Login required"}), 403
 
-    data = request.get_json()
-    question_id = data.get('question_id')
-    student_id = session['student_id']
+#     data = request.get_json()
+#     question_id = data.get('question_id')
+#     student_id = session['student_id']
 
-    # Check if user already liked this question
-    existing_like = LikeQuestion.query.filter_by(student_id=student_id, question_id=question_id).first()
+#     # Check if user already liked this question
+#     existing_like = LikeQuestion.query.filter_by(student_id=student_id, question_id=question_id).first()
     
-    if existing_like:
-        # If already liked, unlike it (toggle behavior)
-        db.session.delete(existing_like)
-        db.session.commit()
-        action = "unliked"
-    else:
-        # If not liked, add a like
-        new_like = LikeQuestion(student_id=student_id, question_id=question_id)
-        db.session.add(new_like)
-        db.session.commit()
-        action = "liked"
+#     if existing_like:
+#         # If already liked, unlike it (toggle behavior)
+#         db.session.delete(existing_like)
+#         db.session.commit()
+#         action = "unliked"
+#     else:
+#         # If not liked, add a like
+#         new_like = LikeQuestion(student_id=student_id, question_id=question_id)
+#         db.session.add(new_like)
+#         db.session.commit()
+#         action = "liked"
     
-    # Get updated like count
-    like_count = LikeQuestion.query.filter_by(question_id=question_id).count()
+#     # Get updated like count
+#     like_count = LikeQuestion.query.filter_by(question_id=question_id).count()
     
-    # Update the question's like_count
-    question = Question.query.get(question_id)
-    if question:
-        question.like_count = like_count
-        db.session.commit()
+#     # Update the question's like_count
+#     question = Question.query.get(question_id)
+#     if question:
+#         question.like_count = like_count
+#         db.session.commit()
 
-    return jsonify({
-        "status": "success", 
-        "action": action,
-        "like_count": like_count
-    })
+#     return jsonify({
+#         "status": "success", 
+#         "action": action,
+#         "like_count": like_count
+#     })
 
 @app.route('/like_answer_2', methods=['POST'])
 def like_answer_2():
@@ -1012,16 +1024,35 @@ def add_question():
 
 @app.route('/qa_forum')
 def qa_forum():
-    # Get all questions
+    if 'student_id' not in session:
+        return redirect(url_for('login'))
+
+    student_id = session['student_id']
+
     questions = db.session.query(Question).all()
     
-    # For each question, load its answers
     for question in questions:
-        # Get all answers for this question
-        answers = db.session.query(Answer).filter(Answer.question_id == question.id).all()
+        # Set liked status for question
+        question.liked_by_current_user = LikeQuestion.query.filter_by(
+            question_id=question.id,
+            student_id=student_id
+        ).first() is not None
+
+        # Fetch and annotate each answer
+        answers = db.session.query(Answer).filter_by(question_id=question.id).all()
+        for answer in answers:
+            answer.liked_by_current_user = LikeAnswer.query.filter_by(
+                answer_id=answer.id,
+                student_id=student_id
+            ).first() is not None
         question.answers = answers
-    
-    return render_template('ASK_Anubhav/Student/qa_forum.html', questions=questions, username=session.get('username'))
+
+    return render_template(
+        'ASK_Anubhav/Student/qa_forum.html',
+        questions=questions,
+        username=session.get('username')
+    )
+
 
 @app.route('/submit_answer', methods=['POST'])
 def submit_answer():
@@ -1142,17 +1173,77 @@ def reject_answer(answer_id):
 
 @app.route('/like_question/<int:question_id>', methods=['POST'])
 def like_question(question_id):
-    question = Question.query.get_or_404(question_id)
-    question.like_count = (question.like_count or 0) + 1
-    db.session.commit()
-    return '', 200
+    if 'student_id' not in session:
+        return jsonify({"status": "error", "message": "Login required"}), 403
+
+    student_id = session['student_id']
+
+    # Check if user already liked this question
+    existing_like = LikeQuestion.query.filter_by(student_id=student_id, question_id=question_id).first()
+
+    if existing_like:
+        # Unlike (dislike)
+        db.session.delete(existing_like)
+        db.session.commit()
+        action = "unliked"
+    else:
+        # Like
+        new_like = LikeQuestion(student_id=student_id, question_id=question_id)
+        db.session.add(new_like)
+        db.session.commit()
+        action = "liked"
+
+    # Recount updated like count
+    like_count = LikeQuestion.query.filter_by(question_id=question_id).count()
+
+    # Save count to Question table
+    question = Question.query.get(question_id)
+    if question:
+        question.like_count = like_count
+        db.session.commit()
+
+    return jsonify({
+        "status": "success",
+        "action": action,
+        "like_count": like_count
+    })
+
 
 @app.route('/like_answer/<int:answer_id>', methods=['POST'])
 def like_answer(answer_id):
-    answer = Answer.query.get_or_404(answer_id)
-    answer.like_count = (answer.like_count or 0) + 1
-    db.session.commit()
-    return '', 200
+    if 'student_id' not in session:
+        return jsonify({"status": "error", "message": "Login required"}), 403
+
+    student_id = session['student_id']
+
+    # Toggle like
+    existing_like = LikeAnswer.query.filter_by(student_id=student_id, answer_id=answer_id).first()
+
+    if existing_like:
+        db.session.delete(existing_like)
+        db.session.commit()
+        action = "unliked"
+    else:
+        new_like = LikeAnswer(student_id=student_id, answer_id=answer_id)
+        db.session.add(new_like)
+        db.session.commit()
+        action = "liked"
+
+    # Update count
+    like_count = LikeAnswer.query.filter_by(answer_id=answer_id).count()
+
+    # Optionally update the like_count column in Answer table
+    answer = Answer.query.get(answer_id)
+    if answer:
+        answer.like_count = like_count
+        db.session.commit()
+
+    return jsonify({
+        "status": "success",
+        "action": action,
+        "like_count": like_count
+    })
+
 
 
 
